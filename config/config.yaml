@@ -1,0 +1,23 @@
+model_list:
+  - model_name: smart-hub-summarizer
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: smart-hub-parser
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: smart-hub-hf-chat
+    litellm_params:
+      model: huggingface/meta-llama/Meta-Llama-3-8B-Instruct
+      api_base: os.environ/HUGGINGFACE_API_BASE
+      api_key: os.environ/HUGGINGFACE_API_KEY
+  - model_name: smart-hub-reasoner
+    litellm_params:
+      model: anthropic/claude-3-7-sonnet-20250219
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+general_settings:
+  master_key: "sk-smarthub-test-master-key" #Can be used for testing purposes, but should be replaced with a secure key in production
+  database_url: "sqlite:///litellm.db"
+

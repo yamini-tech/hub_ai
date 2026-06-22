@@ -1,0 +1,19 @@
+Summarize these research notes into a clear, concise format: Query: Chennai weather today. Result: [{"title": "Chennai, Tamil Nadu, India Hourly Weather | AccuWeather", "href": "https://www.accuweather.com/en/in/chennai/206671/hourly-weather-forecast/206671", "body": "Check current conditions in Chennai, Tamil Nadu, India with radar, hourly, and more."}, {"title": "RMC Chennai - India Meteorological Department", "href": "https://mausam.imd.gov.in/chennai/", "body": "Specialised Forecast \u2666 \u0bae\u0bc0\u0ba9\u0bb5\u0bb0\u0bcd\u0b95\u0bb3\u0bc1\u0b95\u0bcd\u0b95\u0bbe\u0ba9 \u0b8e\u0b9a\u0bcd\u0b9a\u0bb0\u0bbf\u0b95\u0bcd\u0b95\u0bc8 City Forecast Current Weather Chennai 28 o C 89% 14.8 km/h Observation Time: 18 Jun, 22.30 IST"}, {"title": "Chennai, Tamil Nadu, India Weather Forecast | AccuWeather", "href": "https://www.accuweather.com/en/in/chennai/206671/weather-forecast/206671", "body": "1 day ago \u00b7 Chennai, Tamil Nadu, India Weather Forecast, with current conditions, wind, air quality, and what to expect for the next 3 days."}]
+---
+
+---
+Here is a clear and concise summary of the research notes:
+
+**Current Weather in Chennai:**
+
+* Current Temperature: 28°C
+* Humidity: 89%
+* Wind Speed: 14.8 km/h
+
+**Weather Sources:**
+
+1. AccuWeather - Hourly Weather Forecast: https://www.accuweather.com/en/in/chennai/206671/hourly-weather-forecast/206671
+2. India Meteorological Department (RMC Chennai) - Specialised Forecast: https://mausam.imd.gov.in/chennai/
+3. AccuWeather - 1-Day Weather Forecast: https://www.accuweather.com/en/in/chennai/206671/weather-forecast/206671
+
+Please note that these sources provide current and forecasted weather conditions in Chennai, Tamil Nadu, India.
