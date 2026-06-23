@@ -76,3 +76,14 @@ class TestKnowledgeFilePath:
         from app.core.config import PROJECT_ROOT
         assert os.path.isabs(PROJECT_ROOT)
         assert PROJECT_ROOT.endswith("hub_ai")
+
+
+class TestFallbackChains:
+    def test_fallback_chains_loaded_from_yaml(self):
+        from app.core.config import FALLBACK_CHAINS
+        assert isinstance(FALLBACK_CHAINS, dict)
+        assert "gpt-4o" in FALLBACK_CHAINS
+        assert "gpt-4o-mini" in FALLBACK_CHAINS
+        assert "claude-3-5-sonnet" in FALLBACK_CHAINS
+        assert "claude-3-7-sonnet" in FALLBACK_CHAINS
+        assert "ollama/llama3.2" in FALLBACK_CHAINS

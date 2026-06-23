@@ -21,3 +21,10 @@ general_settings:
   master_key: "sk-smarthub-test-master-key" #Can be used for testing purposes, but should be replaced with a secure key in production
   database_url: "sqlite:///litellm.db"
 
+fallback_chains:
+  gpt-4o: ["gpt-4o-mini", "ollama/llama3.2"]
+  gpt-4o-mini: ["ollama/llama3.2"]
+  claude-3-5-sonnet: ["claude-3-7-sonnet", "gpt-4o-mini", "ollama/llama3.2"]
+  claude-3-7-sonnet: ["gpt-4o-mini", "ollama/llama3.2"]
+  ollama/llama3.2: []
+

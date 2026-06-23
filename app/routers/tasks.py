@@ -7,7 +7,7 @@ from app.services.llm_client import call_llm, call_llm_stream
 from app.services.throttling import is_request_allowed, check_rate_limit
 from app.services.model_selector import select_model
 from app.services.prompt_manager import get_system_prompt
-from app.core.config import RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX_REQUESTS
+from app.core.config import RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX_REQUESTS, MAX_TOKENS_TASK
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ def _parse_rate_key(request: ParseRequest) -> str:
 
 @router.post("/summarize")
 async def summarize(request: SummarizeRequest):
-    allowed, count = is_request_allowed(request.text, max_tokens=20000)
+    allowed, count = is_request_allowed(request.text, max_tokens=MAX_TOKENS_TASK)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
     rate_ok, req_count = check_rate_limit(_summarize_rate_key(request), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
@@ -44,7 +44,7 @@ async def summarize(request: SummarizeRequest):
 
 @router.post("/summarize/sync")
 async def summarize_sync(request: SummarizeRequest):
-    allowed, count = is_request_allowed(request.text, max_tokens=20000)
+    allowed, count = is_request_allowed(request.text, max_tokens=MAX_TOKENS_TASK)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
     rate_ok, req_count = check_rate_limit(_summarize_rate_key(request), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
@@ -62,7 +62,7 @@ async def summarize_sync(request: SummarizeRequest):
 
 @router.post("/parse")
 async def parse_unstructured(request: ParseRequest):
-    allowed, count = is_request_allowed(request.text, max_tokens=20000)
+    allowed, count = is_request_allowed(request.text, max_tokens=MAX_TOKENS_TASK)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
     rate_ok, req_count = check_rate_limit(_parse_rate_key(request), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
@@ -86,7 +86,7 @@ async def parse_unstructured(request: ParseRequest):
 
 @router.post("/parse/sync")
 async def parse_unstructured_sync(request: ParseRequest):
-    allowed, count = is_request_allowed(request.text, max_tokens=20000)
+    allowed, count = is_request_allowed(request.text, max_tokens=MAX_TOKENS_TASK)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
     rate_ok, req_count = check_rate_limit(_parse_rate_key(request), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)

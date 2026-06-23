@@ -4,18 +4,10 @@ from httpx import TimeoutException, ConnectError
 from fastapi import HTTPException
 from app.services.usage_tracker import record_llm_usage
 from app.services.cache import get_cache, set_cache
+from app.core.config import FALLBACK_CHAINS
 
 RETRY_MAX = 3
 RETRY_BASE_DELAY = 1.0
-
-# Model fallback chains: primary model -> fallback(s) to try if primary fails
-FALLBACK_CHAINS = {
-    "gpt-4o": ["gpt-4o-mini", "ollama/llama3.2"],
-    "gpt-4o-mini": ["ollama/llama3.2"],
-    "claude-3-5-sonnet": ["claude-3-7-sonnet", "gpt-4o-mini", "ollama/llama3.2"],
-    "claude-3-7-sonnet": ["gpt-4o-mini", "ollama/llama3.2"],
-    "ollama/llama3.2": [],
-}
 
 DEFAULT_MODEL = "ollama/llama3.2"
 

@@ -13,14 +13,14 @@ from app.services.task_processor import run_llm_task
 from app.services.model_selector import select_model
 from app.services.prompt_manager import get_system_prompt
 from app.core.security import verify_api_key
-from app.core.config import API_KEY_ENABLED, MODEL_NAME, API_BASE
+from app.core.config import API_KEY_ENABLED, MODEL_NAME, API_BASE, MAX_TOKENS_GATEWAY
 
 router = APIRouter()
 deps = [Depends(verify_api_key)] if API_KEY_ENABLED else []
 
 @router.post("/ai/gateway", dependencies=deps)
 async def ai_gateway(request: GatewayRequest, background_tasks: BackgroundTasks):
-    allowed, count = is_request_allowed(request.text, max_tokens=10000)
+    allowed, count = is_request_allowed(request.text, max_tokens=MAX_TOKENS_GATEWAY)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
     rate_ok, req_count = check_rate_limit(request.session_id)

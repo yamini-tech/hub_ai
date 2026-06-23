@@ -11,6 +11,13 @@ API_BASE = os.getenv("SMARTHUB_API_BASE", "http://localhost:11434")
 
 # Model routing from config.yaml
 MODEL_MAP = {}
+FALLBACK_CHAINS = {
+    "gpt-4o": ["gpt-4o-mini", "ollama/llama3.2"],
+    "gpt-4o-mini": ["ollama/llama3.2"],
+    "claude-3-5-sonnet": ["claude-3-7-sonnet", "gpt-4o-mini", "ollama/llama3.2"],
+    "claude-3-7-sonnet": ["gpt-4o-mini", "ollama/llama3.2"],
+    "ollama/llama3.2": [],
+}
 
 config_path = os.path.join(PROJECT_ROOT, "config", "config.yaml")
 try:
@@ -24,6 +31,8 @@ try:
                 model = params.get("model", "")
                 if name and model:
                     MODEL_MAP[name] = model
+        if cfg and "fallback_chains" in cfg and cfg["fallback_chains"]:
+            FALLBACK_CHAINS = cfg["fallback_chains"]
 except Exception as e:
     print(f"WARNING: Failed to load config/config.yaml: {e}. Falling back to default models.")
 
@@ -50,3 +59,7 @@ for _var in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "AZURE_API_KEY", "HUGGINGFAC
 # Throttling
 RATE_LIMIT_WINDOW_SEC = int(os.getenv("SMARTHUB_RATE_LIMIT_WINDOW", "60"))
 RATE_LIMIT_MAX_REQUESTS = int(os.getenv("SMARTHUB_RATE_LIMIT_MAX", "30"))
+
+# Token Limits
+MAX_TOKENS_GATEWAY = int(os.getenv("SMARTHUB_MAX_TOKENS_GATEWAY", "10000"))
+MAX_TOKENS_TASK = int(os.getenv("SMARTHUB_MAX_TOKENS_TASK", "20000"))
