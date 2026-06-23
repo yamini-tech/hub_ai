@@ -2,6 +2,7 @@ import asyncio
 import litellm
 from httpx import TimeoutException, ConnectError
 from fastapi import HTTPException
+from app.services.usage_tracker import record_llm_usage
 
 RETRY_MAX = 3
 RETRY_BASE_DELAY = 1.0
@@ -64,6 +65,15 @@ async def call_llm(messages: list, tools_list=None, response_format=None, model=
                 response_format=response_format,
             )
         )
+        model_used = model or "ollama/llama3.2"
+        try:
+            r_usage = response.usage
+            pt = int(getattr(r_usage, "prompt_tokens", 0))
+            ct = int(getattr(r_usage, "completion_tokens", 0))
+            if pt or ct:
+                record_llm_usage(model=model_used, prompt_tokens=pt, completion_tokens=ct)
+        except (TypeError, ValueError, AttributeError):
+            pass
         return response.choices[0].message
     except HTTPException:
         raise
@@ -86,3 +96,5 @@ async def call_llm_stream(messages: list, tools_list=None, model=None):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+

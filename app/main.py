@@ -74,6 +74,13 @@ async def startup_event():
         if isinstance(route, APIRoute):
             print(f"  {list(route.methods)} {route.path}")
 
+@app.get("/metrics")
+async def metrics():
+    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+    from fastapi.responses import Response
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     from fastapi.responses import JSONResponse
