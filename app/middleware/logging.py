@@ -1,9 +1,15 @@
-from fastapi import Request
+import logging
 import time
-import uuid
+from fastapi import Request
 
-class AIUsageLog(dict):
-    pass
+logger = logging.getLogger("smartbrain")
+logger.setLevel(logging.INFO)
+_handler = logging.StreamHandler()
+_handler.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(message)s"
+))
+logger.addHandler(_handler)
+
 
 async def ai_usage_middleware(request: Request, call_next):
     start_time = time.time()
@@ -11,18 +17,23 @@ async def ai_usage_middleware(request: Request, call_next):
         response = await call_next(request)
         latency_ms = (time.time() - start_time) * 1000
         usage = getattr(request.state, "ai_usage", None)
+        parts = [
+            f"method={request.method}",
+            f"path={request.url.path}",
+            f"status={response.status_code}",
+            f"latency_ms={latency_ms:.1f}",
+        ]
         if usage:
-            log_entry = {
-                "request_id": str(uuid.uuid4()),
-                "user_id": "anonymous",
-                "task_type": "ai_process",
-                "model_used": getattr(request.state, "model_used", "unknown"),
-                "prompt_tokens": usage.prompt_tokens,
-                "completion_tokens": usage.completion_tokens,
-                "total_tokens": usage.total_tokens,
-                "estimated_cost": 0.0,
-                "latency_ms": latency_ms,
-            }
+            parts.append(f"model={getattr(request.state, 'model_used', 'unknown')}")
+            parts.append(f"prompt_tokens={usage.prompt_tokens}")
+            parts.append(f"completion_tokens={usage.completion_tokens}")
+            parts.append(f"total_tokens={usage.total_tokens}")
+        logger.info("  ".join(parts))
         return response
-    except Exception as e:
-        raise e
+    except Exception:
+        latency_ms = (time.time() - start_time) * 1000
+        logger.error(
+            "method=%s path=%s status=500 latency_ms=%.1f",
+            request.method, request.url.path, latency_ms,
+        )
+        raise

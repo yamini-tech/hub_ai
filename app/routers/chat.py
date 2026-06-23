@@ -16,6 +16,26 @@ from app.core.config import MODEL_NAME, API_BASE
 
 router = APIRouter()
 chat_histories: dict[str, list[dict]] = {}
+MAX_HISTORY_PER_SESSION = 50
+MAX_SESSIONS = 1000
+
+
+def _trim_session(session_id: str):
+    messages = chat_histories.get(session_id)
+    if not messages:
+        return
+    if len(messages) > MAX_HISTORY_PER_SESSION:
+        keep = MAX_HISTORY_PER_SESSION // 2
+        system_msgs = [m for m in messages if m.get("role") == "system"]
+        other_msgs = [m for m in messages if m.get("role") != "system"]
+        chat_histories[session_id] = system_msgs + other_msgs[-keep:]
+
+
+def _evict_sessions():
+    if len(chat_histories) > MAX_SESSIONS:
+        excess = len(chat_histories) - MAX_SESSIONS
+        for key in list(chat_histories.keys())[:excess]:
+            del chat_histories[key]
 
 @router.post("/agent")
 async def agent_endpoint(request: AIRequest):
@@ -39,31 +59,38 @@ async def agent_endpoint(request: AIRequest):
 
     session_id = request.session_id
     if session_id not in chat_histories:
+        _evict_sessions()
         chat_histories[session_id] = [{"role": "system", "content": system_prompt}]
     chat_histories[session_id][0]["content"] = system_prompt
     messages = chat_histories[session_id]
     messages.append({"role": "user", "content": request.text})
+    _trim_session(session_id)
 
     async def generate():
         stream = await call_llm_stream(messages, tools_list=tools, model=model)
         full_content = ""
         tool_calls_buffer = []
-        async for chunk in stream:
-            delta = chunk.choices[0].delta
-            if delta.content:
-                full_content += delta.content
-                yield f"data: {delta.content}\n\n"
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    if len(tool_calls_buffer) <= tc.index:
-                        tool_calls_buffer.append({"id": "", "function": {"name": "", "arguments": ""}})
-                    if tc.id:
-                        tool_calls_buffer[tc.index]["id"] = tc.id
-                    if tc.function:
-                        if tc.function.name:
-                            tool_calls_buffer[tc.index]["function"]["name"] = tc.function.name
-                        if tc.function.arguments:
-                            tool_calls_buffer[tc.index]["function"]["arguments"] += tc.function.arguments
+        try:
+            async with asyncio.timeout(120):
+                async for chunk in stream:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        full_content += delta.content
+                        yield f"data: {delta.content}\n\n"
+                    if delta.tool_calls:
+                        for tc in delta.tool_calls:
+                            if len(tool_calls_buffer) <= tc.index:
+                                tool_calls_buffer.append({"id": "", "function": {"name": "", "arguments": ""}})
+                            if tc.id:
+                                tool_calls_buffer[tc.index]["id"] = tc.id
+                            if tc.function:
+                                if tc.function.name:
+                                    tool_calls_buffer[tc.index]["function"]["name"] = tc.function.name
+                                if tc.function.arguments:
+                                    tool_calls_buffer[tc.index]["function"]["arguments"] += tc.function.arguments
+        except TimeoutError:
+            yield "data: [STREAM_TIMEOUT]\n\n"
+            return
         if tool_calls_buffer:
             yield f"data: __tool_calls__:{json.dumps(tool_calls_buffer)}\n\n"
             for tc in tool_calls_buffer:
@@ -75,10 +102,15 @@ async def agent_endpoint(request: AIRequest):
                     tool_result = await asyncio.to_thread(read_knowledge_base, query=request.text)
                 messages.append({"role": "tool", "tool_call_id": tc["id"], "content": str(tool_result)})
             stream2 = await call_llm_stream(messages, model=model)
-            async for chunk in stream2:
-                if content := chunk.choices[0].delta.content:
-                    yield f"data: {content}\n\n"
+            try:
+                async with asyncio.timeout(120):
+                    async for chunk in stream2:
+                        if content := chunk.choices[0].delta.content:
+                            yield f"data: {content}\n\n"
+            except TimeoutError:
+                yield "data: [STREAM_TIMEOUT]\n\n"
         messages.append({"role": "assistant", "content": full_content})
+        _trim_session(session_id)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -109,10 +141,12 @@ async def agent_sync(request: AIRequest):
     system_prompt = get_system_prompt("agent", context=context)
 
     if session_id not in chat_histories:
+        _evict_sessions()
         chat_histories[session_id] = [{"role": "system", "content": system_prompt}]
     chat_histories[session_id][0]["content"] = system_prompt
     messages = chat_histories[session_id]
     messages.append({"role": "user", "content": request.text})
+    _trim_session(session_id)
 
     response = await litellm.acompletion(
         model=model,
@@ -144,9 +178,11 @@ async def agent_sync(request: AIRequest):
         )
         final_answer = final_response.choices[0].message.content
         messages.append({"role": "assistant", "content": final_answer})
+        _trim_session(session_id)
         return {"answer": final_answer}
 
     messages.append({"role": "assistant", "content": message.content})
+    _trim_session(session_id)
     return {"answer": message.content}
 
 @router.post("/ai/process", status_code=202)

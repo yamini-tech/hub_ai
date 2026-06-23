@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Depends
 from fastapi.routing import APIRoute
 from app.routers.chat import router as chat_router
@@ -7,7 +8,7 @@ from app.routers.hub_compat import router as hub_compat_router
 from app.middleware.logging import ai_usage_middleware
 from app.core.security import verify_api_key
 from app.core.config import API_KEY_ENABLED
-from app.services.prompt_manager import load_prompts
+from app.services.prompt_manager import load_prompts, _PROMPTS
 
 app = FastAPI(
     title="SmartHub AI",
@@ -17,11 +18,11 @@ app = FastAPI(
 
 app.middleware("http")(ai_usage_middleware)
 
-# Public endpoints (agent, process)
-app.include_router(chat_router, prefix="/api", tags=["Agent"])
+deps = [Depends(verify_api_key)] if API_KEY_ENABLED else []
+
+app.include_router(chat_router, prefix="/api", tags=["Agent"], dependencies=deps)
 
 # AI service endpoints — match the spec: POST /api/ai/summarize, POST /api/ai/parse
-deps = [Depends(verify_api_key)] if API_KEY_ENABLED else []
 app.include_router(tasks_router, prefix="/api/ai", tags=["AI Services"], dependencies=deps)
 
 # Centralized Gateway — single entry point for all AI operations
@@ -40,6 +41,8 @@ async def root():
         "hub_compat": "POST /api/v1/chat/stream — hub_backend expects this",
         "docs": "/docs",
         "endpoints": {
+            "health": "/health — liveness check",
+            "ready": "/ready — readiness check (prompts loaded)",
             "gateway": "/api/ai/gateway — single entry point for all AI tasks",
             "hub_compat": "/api/v1/chat/stream — SmartHub backend streaming chat",
             "summarize": "/api/ai/summarize — streaming summarization",
@@ -48,6 +51,20 @@ async def root():
             "process": "/api/ai/process — async background processing",
         },
     }
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
+
+@app.get("/ready")
+async def ready():
+    prompts_ok = bool(_PROMPTS)
+    return {
+        "status": "ready" if prompts_ok else "not ready",
+        "prompts_loaded": prompts_ok,
+    }
+
 
 @app.on_event("startup")
 async def startup_event():

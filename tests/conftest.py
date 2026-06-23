@@ -10,6 +10,7 @@ from collections import defaultdict
 os.environ.setdefault("SMARTHUB_API_KEY", "")
 os.environ.setdefault("REDIS_HOST", "localhost")
 os.environ.setdefault("REDIS_PORT", "6379")
+os.environ.setdefault("SMARTHUB_ALLOWED_EXTRACT_DIR", "/")
 
 sys.modules.pop("sentence_transformers", None)
 sys.modules.pop("chromadb", None)
@@ -97,4 +98,5 @@ def app():
 @pytest.fixture
 def client(app):
     from fastapi.testclient import TestClient
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c

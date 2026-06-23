@@ -1,34 +1,53 @@
 import os
 import uuid
-import chromadb
-from sentence_transformers import SentenceTransformer
 
-_model = SentenceTransformer('all-MiniLM-L6-v2')
+_model = None
+_chroma_client = None
 
-db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "chroma_db"))
-_chroma_client = chromadb.PersistentClient(path=db_path)
+
+def _get_model():
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+        _model = SentenceTransformer('all-MiniLM-L6-v2')
+    return _model
+
+
+def _get_client():
+    global _chroma_client
+    if _chroma_client is None:
+        import chromadb
+        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "chroma_db"))
+        _chroma_client = chromadb.PersistentClient(path=db_path)
+    return _chroma_client
+
 
 def _get_collection(name: str = "knowledge_base"):
-    return _chroma_client.get_or_create_collection(name=name)
+    return _get_client().get_or_create_collection(name=name)
+
 
 collection = _get_collection()
 
+
 def add_to_memory(text: str):
     doc_id = str(uuid.uuid4())
-    collection.add(documents=[text], ids=[doc_id])
+    col = _get_collection()
+    col.add(documents=[text], ids=[doc_id])
 
 def query_memory(query: str, n_results: int = 3) -> str:
-    results = collection.query(query_texts=[query], n_results=n_results)
+    col = _get_collection()
+    results = col.query(query_texts=[query], n_results=n_results)
     if results['documents'] and results['documents'][0]:
         return "\n".join(results['documents'][0])
     return "No relevant context found."
 
 def get_all_documents() -> list[str]:
-    results = collection.get()
+    col = _get_collection()
+    results = col.get()
     return results['documents'] if results and results['documents'] else []
 
 def get_embedding(text: str) -> list[float]:
-    return _model.encode(text).tolist()
+    return _get_model().encode(text).tolist()
 
 def ingest_chunks(
     chunks: list[str],

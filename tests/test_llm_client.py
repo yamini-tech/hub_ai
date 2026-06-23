@@ -1,4 +1,5 @@
 import pytest
+import litellm
 from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi import HTTPException
 
@@ -68,6 +69,68 @@ class TestCallLlmStream:
         with pytest.raises(HTTPException) as exc:
             await call_llm_stream([{"role": "user", "content": "Hi"}])
         assert exc.value.status_code == 500
+
+
+class TestRetryLogic:
+    @patch("app.services.llm_client.asyncio.sleep", new_callable=AsyncMock)
+    async def test_retry_on_rate_limit_then_succeeds(self, mock_sleep):
+        from app.services.llm_client import call_llm
+        from app.services.llm_client import litellm as llm_module
+
+        mock_message = MagicMock()
+        mock_message.content = "retried response"
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        success_response = MagicMock(choices=[mock_choice])
+
+        orig = llm_module.acompletion
+        llm_module.acompletion = AsyncMock(
+            side_effect=[
+                litellm.RateLimitError("rate limited", "openai", "gpt-4o", response=MagicMock(status_code=429)),
+                litellm.RateLimitError("rate limited", "openai", "gpt-4o", response=MagicMock(status_code=429)),
+                success_response,
+            ]
+        )
+
+        try:
+            result = await call_llm([{"role": "user", "content": "Hi"}])
+            assert result.content == "retried response"
+            assert llm_module.acompletion.call_count == 3
+            mock_sleep.assert_awaited()
+        finally:
+            llm_module.acompletion = orig
+
+    @patch("app.services.llm_client.asyncio.sleep", new_callable=AsyncMock)
+    async def test_max_retries_exhausted_returns_503(self, mock_sleep):
+        from app.services.llm_client import call_llm
+        from app.services.llm_client import litellm as llm_module
+
+        orig = llm_module.acompletion
+        llm_module.acompletion = AsyncMock(
+            side_effect=litellm.RateLimitError("always limited", "openai", "gpt-4o", response=MagicMock(status_code=429))
+        )
+
+        try:
+            with pytest.raises(HTTPException) as exc:
+                await call_llm([{"role": "user", "content": "Hi"}])
+            assert exc.value.status_code == 503
+            assert "unavailable" in exc.value.detail.lower()
+        finally:
+            llm_module.acompletion = orig
+
+    async def test_non_retryable_error_raises_immediately(self):
+        from app.services.llm_client import call_llm
+        from app.services.llm_client import litellm as llm_module
+
+        orig = llm_module.acompletion
+        llm_module.acompletion = AsyncMock(side_effect=ValueError("bad input"))
+
+        try:
+            with pytest.raises(HTTPException) as exc:
+                await call_llm([{"role": "user", "content": "Hi"}])
+            assert exc.value.status_code == 500
+        finally:
+            llm_module.acompletion = orig
 
 
 class TestTools:

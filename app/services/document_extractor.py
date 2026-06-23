@@ -1,18 +1,42 @@
 import os
 
+MAX_FILE_SIZE = 10 * 1024 * 1024
+ALLOWED_BASE = os.environ.get(
+    "SMARTHUB_ALLOWED_EXTRACT_DIR",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),
+)
+
+
+def _sanitize_path(file_path: str) -> str:
+    resolved = os.path.realpath(os.path.abspath(file_path))
+    if not resolved.startswith(ALLOWED_BASE):
+        raise ValueError(f"Access denied: path outside allowed directory ({resolved})")
+    return resolved
+
+
+def _check_file_size(file_path: str):
+    size = os.path.getsize(file_path)
+    if size > MAX_FILE_SIZE:
+        raise ValueError(f"File too large: {size} bytes (max {MAX_FILE_SIZE} bytes)")
+
+
 def extract_text(file_path: str, file_type: str) -> str:
     file_type = file_type.lower().lstrip(".")
 
-    if file_type == "txt":
-        return _extract_txt(file_path)
-    elif file_type == "pdf":
-        return _extract_pdf(file_path)
-    elif file_type == "docx":
-        return _extract_docx(file_path)
-    elif file_type in ("png", "jpg", "jpeg"):
-        return _extract_image(file_path)
-    else:
+    if file_type not in ("txt", "pdf", "docx", "png", "jpg", "jpeg"):
         raise ValueError(f"Unsupported file type: {file_type}")
+
+    safe_path = _sanitize_path(file_path)
+    _check_file_size(safe_path)
+
+    if file_type == "txt":
+        return _extract_txt(safe_path)
+    elif file_type == "pdf":
+        return _extract_pdf(safe_path)
+    elif file_type == "docx":
+        return _extract_docx(safe_path)
+    else:
+        return _extract_image(safe_path)
 
 def _extract_txt(file_path: str) -> str:
     with open(file_path, "r", encoding="utf-8", errors="replace") as f:

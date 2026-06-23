@@ -1,6 +1,8 @@
+import asyncio
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from app.schemas import SummarizeRequest, ParseRequest
+from app.utils import _stream_sse
 from app.services.llm_client import call_llm, call_llm_stream
 from app.services.throttling import is_request_allowed, check_rate_limit
 from app.services.model_selector import select_model
@@ -9,12 +11,20 @@ from app.core.config import RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX_REQUESTS
 
 router = APIRouter()
 
+def _summarize_rate_key(request: SummarizeRequest) -> str:
+    return f"tasks:summarize:{request.session_id}"
+
+
+def _parse_rate_key(request: ParseRequest) -> str:
+    return f"tasks:parse:{request.session_id}"
+
+
 @router.post("/summarize")
 async def summarize(request: SummarizeRequest):
     allowed, count = is_request_allowed(request.text, max_tokens=20000)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
-    rate_ok, req_count = check_rate_limit("tasks:summarize", window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit(_summarize_rate_key(request), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -27,10 +37,8 @@ async def summarize(request: SummarizeRequest):
 
     async def generate():
         stream = await call_llm_stream(messages, model=model)
-        async for chunk in stream:
-            if content := chunk.choices[0].delta.content:
-                yield f"data: {content}\n\n"
-        yield "data: [DONE]\n\n"
+        async for chunk in _stream_sse(stream):
+            yield chunk
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -39,7 +47,7 @@ async def summarize_sync(request: SummarizeRequest):
     allowed, count = is_request_allowed(request.text, max_tokens=20000)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
-    rate_ok, req_count = check_rate_limit("tasks:summarize", window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit(_summarize_rate_key(request), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -57,7 +65,7 @@ async def parse_unstructured(request: ParseRequest):
     allowed, count = is_request_allowed(request.text, max_tokens=20000)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
-    rate_ok, req_count = check_rate_limit("tasks:parse", window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit(_parse_rate_key(request), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -71,10 +79,8 @@ async def parse_unstructured(request: ParseRequest):
 
     async def generate():
         stream = await call_llm_stream(messages, model=model)
-        async for chunk in stream:
-            if content := chunk.choices[0].delta.content:
-                yield f"data: {content}\n\n"
-        yield "data: [DONE]\n\n"
+        async for chunk in _stream_sse(stream):
+            yield chunk
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -83,7 +89,7 @@ async def parse_unstructured_sync(request: ParseRequest):
     allowed, count = is_request_allowed(request.text, max_tokens=20000)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
-    rate_ok, req_count = check_rate_limit("tasks:parse", window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit(_parse_rate_key(request), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 

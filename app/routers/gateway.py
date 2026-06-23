@@ -103,31 +103,40 @@ async def _handle_process(request: GatewayRequest, background_tasks: BackgroundT
 
 async def _stream(messages: list, model: str = ""):
     stream = await call_llm_stream(messages, model=model or None)
-    async for chunk in stream:
-        if content := chunk.choices[0].delta.content:
-            yield f"data: {content}\n\n"
+    try:
+        async with asyncio.timeout(120):
+            async for chunk in stream:
+                if content := chunk.choices[0].delta.content:
+                    yield f"data: {content}\n\n"
+    except TimeoutError:
+        yield "data: [STREAM_TIMEOUT]\n\n"
     yield "data: [DONE]\n\n"
 
 async def _agent_stream(messages: list, original_text: str, model: str):
     stream = await call_llm_stream(messages, tools_list=tools, model=model)
     full_content = ""
     tool_calls_buffer = []
-    async for chunk in stream:
-        delta = chunk.choices[0].delta
-        if delta.content:
-            full_content += delta.content
-            yield f"data: {delta.content}\n\n"
-        if delta.tool_calls:
-            for tc in delta.tool_calls:
-                if len(tool_calls_buffer) <= tc.index:
-                    tool_calls_buffer.append({"id": "", "function": {"name": "", "arguments": ""}})
-                if tc.id:
-                    tool_calls_buffer[tc.index]["id"] = tc.id
-                if tc.function:
-                    if tc.function.name:
-                        tool_calls_buffer[tc.index]["function"]["name"] = tc.function.name
-                    if tc.function.arguments:
-                        tool_calls_buffer[tc.index]["function"]["arguments"] += tc.function.arguments
+    try:
+        async with asyncio.timeout(120):
+            async for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    full_content += delta.content
+                    yield f"data: {delta.content}\n\n"
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        if len(tool_calls_buffer) <= tc.index:
+                            tool_calls_buffer.append({"id": "", "function": {"name": "", "arguments": ""}})
+                        if tc.id:
+                            tool_calls_buffer[tc.index]["id"] = tc.id
+                        if tc.function:
+                            if tc.function.name:
+                                tool_calls_buffer[tc.index]["function"]["name"] = tc.function.name
+                            if tc.function.arguments:
+                                tool_calls_buffer[tc.index]["function"]["arguments"] += tc.function.arguments
+    except TimeoutError:
+        yield "data: [STREAM_TIMEOUT]\n\n"
+        return
     if tool_calls_buffer:
         yield f"data: __tool_calls__:{json.dumps(tool_calls_buffer)}\n\n"
         for tc in tool_calls_buffer:
@@ -139,7 +148,11 @@ async def _agent_stream(messages: list, original_text: str, model: str):
                 tool_result = await asyncio.to_thread(read_knowledge_base, query=original_text)
             messages.append({"role": "tool", "tool_call_id": tc["id"], "content": str(tool_result)})
         stream2 = await call_llm_stream(messages, model=model)
-        async for chunk in stream2:
-            if content := chunk.choices[0].delta.content:
-                yield f"data: {content}\n\n"
+        try:
+            async with asyncio.timeout(120):
+                async for chunk in stream2:
+                    if content := chunk.choices[0].delta.content:
+                        yield f"data: {content}\n\n"
+        except TimeoutError:
+            yield "data: [STREAM_TIMEOUT]\n\n"
     yield "data: [DONE]\n\n"

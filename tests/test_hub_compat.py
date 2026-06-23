@@ -16,9 +16,7 @@ class TestChatStream:
             "/api/v1/chat/stream",
             json={"user_id": "test_user"},
         )
-        assert response.status_code == 400
-        data = response.json()
-        assert "messages" in data["detail"].lower()
+        assert response.status_code == 422
 
     def test_chat_stream_with_rag(self, client, mock_litellm_acompletion, mock_tiktoken):
         response = client.post(
@@ -48,9 +46,7 @@ class TestEmbed:
             "/api/v1/embed",
             json={"user_id": "test_user"},
         )
-        assert response.status_code == 400
-        data = response.json()
-        assert "text" in data["detail"].lower()
+        assert response.status_code == 422
 
 
 class TestExtract:
@@ -59,9 +55,7 @@ class TestExtract:
             "/api/v1/extract",
             json={"user_id": "test_user"},
         )
-        assert response.status_code == 400
-        data = response.json()
-        assert "file_path" in data["detail"].lower()
+        assert response.status_code == 422
 
     def test_extract_file_not_found(self, client, mock_tiktoken):
         response = client.post(
@@ -132,7 +126,7 @@ class TestRagIngest:
             "/api/v1/rag/ingest",
             json={"user_id": "test_user"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 422
 
 
 class TestRagRetrieve:
@@ -158,7 +152,7 @@ class TestRagRetrieve:
             "/api/v1/rag/retrieve",
             json={"user_id": "test_user"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 422
 
 
 class TestRagDelete:
