@@ -283,6 +283,116 @@ hub_ai/
 python -m pytest tests/ -v
 ```
 
+## Manual Testing
+
+Once the server is running (`uvicorn app.main:app --host 0.0.0.0 --port 8003 --reload`), you can test endpoints with `curl`.
+
+### Without API Keys (no LLM calls)
+
+These test the server infrastructure without needing any provider keys:
+
+```bash
+# 1. Root health check
+curl http://localhost:8003/
+
+# 2. Swagger UI — open in browser:
+# http://localhost:8003/docs
+
+# 3. Trigger token limit exceeded (returns 429)
+curl -X POST http://localhost:8003/api/ai/summarize \
+  -H "Content-Type: application/json" \
+  -d '{"text":"'"$(python -c "print('x'*5000)")"'"}'
+
+# 4. Async job creation (background task will fail, but job is created)
+curl -X POST http://localhost:8003/api/ai/process \
+  -H "Content-Type: application/json" \
+  -d '{"text":"hello","task_type":"summarize"}'
+
+# 5. Missing required fields (returns 422)
+curl -X POST http://localhost:8003/api/ai/summarize \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+### With a Local Ollama (free, no API key needed)
+
+If you have Ollama installed and the `llama3.2` model pulled, LLM calls work immediately:
+
+```bash
+# 6. Summarize (sync)
+curl -X POST http://localhost:8003/api/ai/summarize/sync \
+  -H "Content-Type: application/json" \
+  -d '{"text":"The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet."}'
+```
+
+### With API Keys
+
+Set one or more provider keys in `.env`, then:
+
+```bash
+# 7. Gateway — summarize (streaming SSE)
+curl -X POST http://localhost:8003/api/ai/gateway \
+  -H "Content-Type: application/json" \
+  -d '{"task_type":"summarize","text":"Long document text here...","stream":true}'
+
+# 8. Gateway — summarize (sync JSON)
+curl -X POST http://localhost:8003/api/ai/gateway \
+  -H "Content-Type: application/json" \
+  -d '{"task_type":"summarize","text":"Long document text here...","stream":false}'
+
+# 9. Gateway — parse (sync JSON)
+curl -X POST http://localhost:8003/api/ai/gateway \
+  -H "Content-Type: application/json" \
+  -d '{"task_type":"parse","text":"John Doe, 25, lives at 123 Main St.","stream":false}'
+
+# 10. Gateway — agent chat
+curl -X POST http://localhost:8003/api/ai/gateway \
+  -H "Content-Type: application/json" \
+  -d '{"task_type":"agent","text":"What is the capital of France?","stream":false}'
+
+# 11. Gateway — async process
+curl -X POST http://localhost:8003/api/ai/gateway \
+  -H "Content-Type: application/json" \
+  -d '{"task_type":"process","text":"Process this in the background."}'
+
+# 12. Check job status (use job_id from step 11)
+curl http://localhost:8003/api/ai/status/<job_id>
+```
+
+### Hub Compatibility Endpoints
+
+```bash
+# 13. Chat stream (hub format)
+curl -X POST http://localhost:8003/api/v1/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello"}],"user_id":"test"}'
+
+# 14. Generate embedding
+curl -X POST http://localhost:8003/api/v1/embed \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Embed this text","user_id":"test"}'
+
+# 15. Extract text from a file
+curl -X POST http://localhost:8003/api/v1/extract \
+  -H "Content-Type: application/json" \
+  -d '{"file_path":"/path/to/file.txt","file_type":"txt","user_id":"test"}'
+
+# 16. RAG: ingest chunks
+curl -X POST http://localhost:8003/api/v1/rag/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"test","document_id":"doc1","text":"Some content to store in the vector database."}'
+
+# 17. RAG: retrieve chunks
+curl -X POST http://localhost:8003/api/v1/rag/retrieve \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"test","query":"some content","top_k":3}'
+
+# 18. RAG: delete document
+curl -X DELETE "http://localhost:8003/api/v1/rag/documents/doc1?user_id=test"
+```
+
+If `SMARTHUB_API_KEY` is set in `.env`, add `-H "X-API-KEY: your-key"` to all requests targeting `/api/ai/*` and `/api/v1/*` endpoints.
+
 ## Troubleshooting
 
 **"API key is a placeholder" warning at startup:**
