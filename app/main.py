@@ -1,5 +1,6 @@
 import os
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from app.routers.chat import router as chat_router
 from app.routers.tasks import router as tasks_router
@@ -10,6 +11,8 @@ from app.core.security import verify_api_key
 from app.core.config import API_KEY_ENABLED
 from app.services.prompt_manager import load_prompts, _PROMPTS
 
+MAX_REQUEST_SIZE = int(os.getenv("SMARTHUB_MAX_REQUEST_SIZE", str(10 * 1024 * 1024)))
+
 app = FastAPI(
     title="SmartHub AI",
     description="Unified AI microservice for SmartHub — summarization, parsing, chat, and agent capabilities with streaming.",
@@ -17,6 +20,17 @@ app = FastAPI(
 )
 
 app.middleware("http")(ai_usage_middleware)
+
+
+@app.middleware("http")
+async def request_size_middleware(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_REQUEST_SIZE:
+        return JSONResponse(
+            status_code=413,
+            content={"detail": f"Request too large. Maximum allowed size is {MAX_REQUEST_SIZE} bytes."},
+        )
+    return await call_next(request)
 
 deps = [Depends(verify_api_key)] if API_KEY_ENABLED else []
 
@@ -73,6 +87,13 @@ async def startup_event():
     for route in app.routes:
         if isinstance(route, APIRoute):
             print(f"  {list(route.methods)} {route.path}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    from app.services.vector_store import _cleanup
+    _cleanup()
+    print("--- SmartHub Intelligence Brain shut down gracefully ---")
 
 @app.get("/metrics")
 async def metrics():

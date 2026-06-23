@@ -1,7 +1,14 @@
 import time
 import pytest
 from unittest.mock import patch, MagicMock
+import app.services.throttling as throttling_mod
 from app.services.throttling import get_token_count, is_request_allowed, check_rate_limit, _rate_windows
+
+
+@pytest.fixture(autouse=True)
+def force_memory_rate_limiter():
+    with patch.object(throttling_mod, "_get_rate_limiter", return_value=None):
+        yield
 
 
 class TestGetTokenCount:

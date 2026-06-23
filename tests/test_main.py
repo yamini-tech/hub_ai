@@ -1,6 +1,12 @@
 from app.main import app
 
 
+class TestGracefulShutdown:
+    def test_shutdown_handler_registered(self):
+        from app.main import app as _app
+        assert len(_app.router.on_shutdown) == 1
+
+
 class TestRootEndpoint:
     def test_root_returns_service_info(self, client):
         response = client.get("/")
@@ -39,6 +45,24 @@ class TestReadyEndpoint:
         data = response.json()
         assert data["status"] == "ready"
         assert data["prompts_loaded"] is True
+
+
+class TestRequestBodySizeLimit:
+    def test_small_request_passes(self, client, mock_tiktoken):
+        mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
+        response = client.post("/api/ai/process", json={"text": "small", "task_type": "summarize"})
+        assert response.status_code == 202
+
+    def test_oversized_request_returns_413(self, client, monkeypatch, mock_tiktoken):
+        mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
+        monkeypatch.setattr("app.main.MAX_REQUEST_SIZE", 100)
+        response = client.post(
+            "/api/ai/process",
+            json={"text": "x" * 200, "task_type": "summarize"},
+        )
+        assert response.status_code == 413
+        data = response.json()
+        assert "detail" in data
 
 
 class TestGlobalExceptionHandler:

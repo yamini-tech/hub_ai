@@ -24,8 +24,8 @@ try:
                 model = params.get("model", "")
                 if name and model:
                     MODEL_MAP[name] = model
-except Exception:
-    pass  # fall back to defaults
+except Exception as e:
+    print(f"WARNING: Failed to load config/config.yaml: {e}. Falling back to default models.")
 
 # Fallback model map for task types
 TASK_MODEL_MAP = {

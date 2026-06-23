@@ -5,6 +5,12 @@ _model = None
 _chroma_client = None
 
 
+def _cleanup():
+    global _model, _chroma_client
+    _chroma_client = None
+    _model = None
+
+
 def _get_model():
     global _model
     if _model is None:

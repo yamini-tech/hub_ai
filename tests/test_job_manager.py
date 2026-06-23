@@ -40,22 +40,24 @@ class TestJobManager:
         result = get_job("nonexistent-id")
         assert result is None
 
-    @patch("app.services.job_manager._REDIS_AVAILABLE", True)
-    def test_create_job_uses_redis_when_available(self):
-        with patch("app.services.job_manager._redis") as mock_redis:
-            job_id = create_job()
-            mock_redis.set.assert_called_once()
-            args, _ = mock_redis.set.call_args
-            assert args[0] == f"job:{job_id}"
-            assert json.loads(args[1])["status"] == "pending"
+    @patch("app.services.job_manager._get_redis")
+    def test_create_job_uses_redis_when_available(self, mock_get_redis):
+        mock_redis = MagicMock()
+        mock_get_redis.return_value = mock_redis
+        job_id = create_job()
+        mock_redis.set.assert_called_once()
+        args, _ = mock_redis.set.call_args
+        assert args[0] == f"job:{job_id}"
+        assert json.loads(args[1])["status"] == "pending"
 
-    @patch("app.services.job_manager._REDIS_AVAILABLE", True)
-    def test_get_job_uses_redis_when_available(self):
-        with patch("app.services.job_manager._redis") as mock_redis:
-            mock_redis.get.return_value = json.dumps({"status": "done", "result": "ok"})
-            result = get_job("test-id")
-            mock_redis.get.assert_called_with("job:test-id")
-            assert result["status"] == "done"
+    @patch("app.services.job_manager._get_redis")
+    def test_get_job_uses_redis_when_available(self, mock_get_redis):
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = json.dumps({"status": "done", "result": "ok"})
+        mock_get_redis.return_value = mock_redis
+        result = get_job("test-id")
+        mock_redis.get.assert_called_with("job:test-id")
+        assert result["status"] == "done"
 
 
 class TestChatHistory:
