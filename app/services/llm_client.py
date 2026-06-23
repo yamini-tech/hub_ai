@@ -3,9 +3,21 @@ import litellm
 from httpx import TimeoutException, ConnectError
 from fastapi import HTTPException
 from app.services.usage_tracker import record_llm_usage
+from app.services.cache import get_cache, set_cache
 
 RETRY_MAX = 3
 RETRY_BASE_DELAY = 1.0
+
+# Model fallback chains: primary model -> fallback(s) to try if primary fails
+FALLBACK_CHAINS = {
+    "gpt-4o": ["gpt-4o-mini", "ollama/llama3.2"],
+    "gpt-4o-mini": ["ollama/llama3.2"],
+    "claude-3-5-sonnet": ["claude-3-7-sonnet", "gpt-4o-mini", "ollama/llama3.2"],
+    "claude-3-7-sonnet": ["gpt-4o-mini", "ollama/llama3.2"],
+    "ollama/llama3.2": [],
+}
+
+DEFAULT_MODEL = "ollama/llama3.2"
 
 tools = [
     {
@@ -38,6 +50,13 @@ tools = [
 _RETRYABLE = (TimeoutException, ConnectError, litellm.RateLimitError)
 
 
+def _get_fallback_models(model: str) -> list[str]:
+    for prefix, fallbacks in FALLBACK_CHAINS.items():
+        if model.startswith(prefix) or model.endswith(prefix):
+            return fallbacks
+    return []
+
+
 async def _call_with_retry(coro_factory):
     last_exc = None
     for attempt in range(RETRY_MAX):
@@ -55,17 +74,44 @@ async def _call_with_retry(coro_factory):
     )
 
 
+async def _call_with_fallback(coro_factory, model: str):
+    models_to_try = [model] + _get_fallback_models(model)
+    if models_to_try and not models_to_try[-1]:
+        models_to_try = models_to_try[:-1]
+    if not models_to_try:
+        models_to_try = [DEFAULT_MODEL]
+
+    last_exc = None
+    for fallback_idx, m in enumerate(models_to_try):
+        try:
+            response = await _call_with_retry(lambda: coro_factory(m))
+            return response, m
+        except HTTPException as e:
+            if e.status_code == 503 and fallback_idx < len(models_to_try) - 1:
+                last_exc = e
+                continue
+            raise
+    raise HTTPException(
+        status_code=503,
+        detail=f"All fallback models exhausted: {last_exc}",
+    )
+
+
 async def call_llm(messages: list, tools_list=None, response_format=None, model=None):
+    model = model or DEFAULT_MODEL
+    cached = get_cache(messages, model, tools_list, response_format)
+    if cached is not None:
+        return cached
     try:
-        response = await _call_with_retry(
-            lambda: litellm.acompletion(
-                model=model or "ollama/llama3.2",
+        response, model_used = await _call_with_fallback(
+            lambda m: litellm.acompletion(
+                model=m,
                 messages=messages,
                 tools=tools_list,
                 response_format=response_format,
-            )
+            ),
+            model=model,
         )
-        model_used = model or "ollama/llama3.2"
         try:
             r_usage = response.usage
             pt = int(getattr(r_usage, "prompt_tokens", 0))
@@ -74,7 +120,9 @@ async def call_llm(messages: list, tools_list=None, response_format=None, model=
                 record_llm_usage(model=model_used, prompt_tokens=pt, completion_tokens=ct)
         except (TypeError, ValueError, AttributeError):
             pass
-        return response.choices[0].message
+        result = response.choices[0].message
+        set_cache(messages, model_used, result, tools_list, response_format)
+        return result
     except HTTPException:
         raise
     except Exception as e:
@@ -82,14 +130,16 @@ async def call_llm(messages: list, tools_list=None, response_format=None, model=
 
 
 async def call_llm_stream(messages: list, tools_list=None, model=None):
+    model = model or DEFAULT_MODEL
     try:
-        response = await _call_with_retry(
-            lambda: litellm.acompletion(
-                model=model or "ollama/llama3.2",
+        response, _ = await _call_with_fallback(
+            lambda m: litellm.acompletion(
+                model=m,
                 messages=messages,
                 tools=tools_list,
                 stream=True,
-            )
+            ),
+            model=model,
         )
         return response
     except HTTPException:

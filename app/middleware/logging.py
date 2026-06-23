@@ -4,6 +4,7 @@ import uuid
 from fastapi import Request
 from app.services.pricing import calculate_cost
 from app.services.usage_tracker import set_request_id, pop_usage
+from app.services.pii_redactor import redact_pii
 from app.services.metrics import (
     http_requests_total,
     http_request_duration_seconds,
@@ -33,10 +34,11 @@ async def ai_usage_middleware(request: Request, call_next):
         http_requests_total.labels(method=request.method, path=request.url.path, status=response.status_code).inc()
         http_request_duration_seconds.labels(method=request.method, path=request.url.path).observe(latency_ms / 1000)
 
+        safe_path = redact_pii(request.url.path)
         parts = [
             f"request_id={request_id}",
             f"method={request.method}",
-            f"path={request.url.path}",
+            f"path={safe_path}",
             f"status={response.status_code}",
             f"latency_ms={latency_ms:.1f}",
         ]

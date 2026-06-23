@@ -81,7 +81,7 @@ class TestProcessEndpoint:
 
 
 class TestStatusEndpoint:
-    def test_get_existing_job(self, client, mock_tiktoken, mock_litellm_completion):
+    def test_get_existing_job(self, client, mock_tiktoken, mock_litellm_acompletion):
         mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
 
         create_resp = client.post(

@@ -133,6 +133,75 @@ class TestRetryLogic:
             llm_module.acompletion = orig
 
 
+class TestFallbackChain:
+    @patch("app.services.llm_client.asyncio.sleep", new_callable=AsyncMock)
+    async def test_fallback_on_rate_limit(self, mock_sleep):
+        from app.services.llm_client import call_llm
+        from app.services.llm_client import litellm as llm_module
+
+        mock_message = MagicMock()
+        mock_message.content = "fallback response"
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        success_response = MagicMock(choices=[mock_choice])
+
+        orig = llm_module.acompletion
+        # Primary "claude-3-5-sonnet" fails with rate limit x3, fallback "claude-3-7-sonnet" succeeds
+        llm_module.acompletion = AsyncMock(
+            side_effect=[
+                litellm.RateLimitError("rate limited", "openai", "claude-3-5-sonnet", response=MagicMock(status_code=429)),
+                litellm.RateLimitError("rate limited", "openai", "claude-3-5-sonnet", response=MagicMock(status_code=429)),
+                litellm.RateLimitError("rate limited", "openai", "claude-3-5-sonnet", response=MagicMock(status_code=429)),
+                success_response,
+            ]
+        )
+
+        try:
+            result = await call_llm([{"role": "user", "content": "Hi"}], model="claude-3-5-sonnet")
+            assert result.content == "fallback response"
+            assert llm_module.acompletion.call_count == 4  # 3 retries on primary + 1 on fallback
+        finally:
+            llm_module.acompletion = orig
+
+    @patch("app.services.llm_client.asyncio.sleep", new_callable=AsyncMock)
+    async def test_all_fallbacks_exhausted_returns_503(self, mock_sleep):
+        from app.services.llm_client import call_llm
+        from app.services.llm_client import litellm as llm_module
+
+        orig = llm_module.acompletion
+        llm_module.acompletion = AsyncMock(
+            side_effect=litellm.RateLimitError("always limited", "openai", "gpt-4o", response=MagicMock(status_code=429))
+        )
+
+        try:
+            with pytest.raises(HTTPException) as exc:
+                await call_llm([{"role": "user", "content": "Hi"}], model="gpt-4o")
+            assert exc.value.status_code == 503
+            # gpt-4o tries 3 times, then gpt-4o-mini tries 3 times, then ollama/llama3.2 tries 3 times = 9 total
+            assert llm_module.acompletion.call_count == 9
+        finally:
+            llm_module.acompletion = orig
+
+    async def test_no_fallback_for_unknown_model(self):
+        from app.services.llm_client import call_llm
+        from app.services.llm_client import litellm as llm_module
+
+        mock_message = MagicMock()
+        mock_message.content = "ok"
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+
+        orig = llm_module.acompletion
+        llm_module.acompletion = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
+
+        try:
+            result = await call_llm([{"role": "user", "content": "Hi"}], model="unknown-model")
+            assert result.content == "ok"
+            assert llm_module.acompletion.call_count == 1
+        finally:
+            llm_module.acompletion = orig
+
+
 class TestTools:
     def test_tools_defined_correctly(self):
         from app.services.llm_client import tools

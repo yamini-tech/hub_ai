@@ -50,6 +50,12 @@ def clear_job_store():
     _memory_store.clear()
 
 
+@pytest.fixture(autouse=True)
+def clear_llm_cache():
+    from app.services.cache import clear_cache
+    clear_cache()
+
+
 @pytest.fixture
 def mock_tiktoken():
     with patch("app.services.throttling.tiktoken") as mock_tk:
