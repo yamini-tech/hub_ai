@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from app.routers.chat import router as chat_router
@@ -12,6 +13,22 @@ from app.core.config import API_KEY_ENABLED
 from app.services.prompt_manager import load_prompts, _PROMPTS
 
 MAX_REQUEST_SIZE = int(os.getenv("SMARTHUB_MAX_REQUEST_SIZE", str(10 * 1024 * 1024)))
+CORS_ORIGINS = os.getenv("SMARTHUB_CORS_ORIGINS", "")
+
+app = FastAPI(
+    title="SmartHub AI",
+    description="Unified AI microservice for SmartHub — summarization, parsing, chat, and agent capabilities with streaming.",
+    version="2.0.0",
+)
+
+if CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[o.strip() for o in CORS_ORIGINS.split(",") if o.strip()],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 app = FastAPI(
     title="SmartHub AI",

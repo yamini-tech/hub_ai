@@ -47,14 +47,23 @@ class TestCallLlm:
 
 class TestCallLlmStream:
     @patch("app.services.llm_client.litellm")
-    async def test_call_llm_stream_returns_async_iterable(self, mock_litellm):
+    async def test_call_llm_stream_returns_redacted_stream(self, mock_litellm):
         from app.services.llm_client import call_llm_stream
 
-        mock_stream = AsyncMock()
-        mock_litellm.acompletion = AsyncMock(return_value=mock_stream)
+        async def _mock_stream():
+            chunk = MagicMock()
+            chunk.choices = [MagicMock()]
+            chunk.choices[0].delta.content = "contact me at user@example.com"
+            yield chunk
+
+        mock_litellm.acompletion = AsyncMock(return_value=_mock_stream())
 
         result = await call_llm_stream([{"role": "user", "content": "Hi"}])
-        assert result == mock_stream
+        chunks = []
+        async for c in result:
+            chunks.append(c.choices[0].delta.content)
+        assert "[EMAIL]" in chunks[0]
+        assert "user@example.com" not in chunks[0]
         mock_litellm.acompletion.assert_called_with(
             model="ollama/llama3.2",
             messages=[{"role": "user", "content": "Hi"}],

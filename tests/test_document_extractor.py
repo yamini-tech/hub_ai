@@ -85,6 +85,30 @@ class TestExtractText:
         with pytest.raises(ValueError, match="Unsupported file type"):
             extract_text("/fake/path", "EXE")
 
+    def test_extension_mismatch_raises(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False
+        ) as f:
+            f.write("content")
+            path = f.name
+        try:
+            with pytest.raises(ValueError, match="does not match declared type"):
+                extract_text(path, "pdf")
+        finally:
+            os.unlink(path)
+
+    def test_extension_match_passes(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False
+        ) as f:
+            f.write("content")
+            path = f.name
+        try:
+            result = extract_text(path, "txt")
+            assert result == "content"
+        finally:
+            os.unlink(path)
+
     def test_file_not_found_txt(self):
         with pytest.raises(FileNotFoundError):
             extract_text("/nonexistent/file.txt", "txt")

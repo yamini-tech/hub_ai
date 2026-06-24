@@ -9,5 +9,5 @@ async def web_search(query: str) -> str:
             with DDGS() as ddgs:
                 return json.dumps(list(ddgs.text(query, max_results=3)))
         return await loop.run_in_executor(None, _search)
-    except Exception as e:
-        return f"Search error: {e}"
+    except Exception:
+        return "[Web search temporarily unavailable]"

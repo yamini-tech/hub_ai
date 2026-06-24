@@ -1,4 +1,5 @@
 from unittest.mock import patch, MagicMock, AsyncMock
+import json
 
 
 class TestAgentEndpoint:
@@ -34,6 +35,29 @@ class TestAgentEndpoint:
 
 
 class TestAgentSyncEndpoint:
+    @patch("app.routers.chat.litellm")
+    def test_agent_sync_handles_malformed_tool_args(self, mock_litellm, client, mock_tiktoken):
+        mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
+        mock_message = MagicMock()
+        mock_message.content = None
+        mock_message.tool_calls = [
+            MagicMock(
+                id="call_1",
+                function=MagicMock(name="web_search", arguments="not valid json{{{")
+            )
+        ]
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_litellm.acompletion = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
+
+        response = client.post(
+            "/api/agent/sync",
+            json={"text": "Hello", "session_id": "test_sess"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "answer" in data
+
     def test_agent_sync_remember(self, client, mock_tiktoken):
         mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
 
@@ -53,6 +77,17 @@ class TestAgentSyncEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "answer" in data
+
+    def test_agent_sync_exceeds_token_limit(self, client, mock_tiktoken):
+        mock_enc = MagicMock()
+        mock_enc.encode.return_value = [1] * 15000
+        mock_tiktoken.encoding_for_model.return_value = mock_enc
+
+        response = client.post(
+            "/api/agent/sync",
+            json={"text": "x" * 500, "session_id": "test_sess"},
+        )
+        assert response.status_code == 429
 
 
 class TestProcessEndpoint:

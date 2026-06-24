@@ -75,3 +75,25 @@ class TestParseEndpoint:
             json={"text": "x" * 1000},
         )
         assert response.status_code == 429
+
+    def test_summarize_sync_exceeds_token_limit(self, client, mock_tiktoken):
+        mock_enc = MagicMock()
+        mock_enc.encode.return_value = [1] * 25000
+        mock_tiktoken.encoding_for_model.return_value = mock_enc
+
+        response = client.post(
+            "/api/ai/summarize/sync",
+            json={"text": "x" * 1000},
+        )
+        assert response.status_code == 429
+
+    def test_parse_sync_exceeds_token_limit(self, client, mock_tiktoken):
+        mock_enc = MagicMock()
+        mock_enc.encode.return_value = [1] * 25000
+        mock_tiktoken.encoding_for_model.return_value = mock_enc
+
+        response = client.post(
+            "/api/ai/parse/sync",
+            json={"text": "x" * 1000},
+        )
+        assert response.status_code == 429

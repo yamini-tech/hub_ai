@@ -4,6 +4,9 @@ from httpx import TimeoutException, ConnectError
 from fastapi import HTTPException
 from app.services.usage_tracker import record_llm_usage
 from app.services.cache import get_cache, set_cache
+from app.services.pii_redactor import redact_pii, redact_stream
+from app.services.injection_detector import check_injection
+from app.services.content_filter import check_content, filter_stream, _BLOCKED_RESPONSE
 from app.core.config import FALLBACK_CHAINS
 
 RETRY_MAX = 3
@@ -91,8 +94,15 @@ async def _call_with_fallback(coro_factory, model: str):
 
 async def call_llm(messages: list, tools_list=None, response_format=None, model=None):
     model = model or DEFAULT_MODEL
+    for m in messages:
+        if m.get("role") == "user" and m.get("content"):
+            injection = check_injection(m["content"])
+            if injection:
+                raise HTTPException(status_code=400, detail=injection)
     cached = get_cache(messages, model, tools_list, response_format)
     if cached is not None:
+        if cached.content:
+            cached.content = redact_pii(cached.content)
         return cached
     try:
         response, model_used = await _call_with_fallback(
@@ -113,6 +123,12 @@ async def call_llm(messages: list, tools_list=None, response_format=None, model=
         except (TypeError, ValueError, AttributeError):
             pass
         result = response.choices[0].message
+        if result.content:
+            result.content = redact_pii(result.content)
+        if result.content:
+            safe, reason = check_content(result.content)
+            if not safe:
+                result.content = _BLOCKED_RESPONSE
         set_cache(messages, model_used, result, tools_list, response_format)
         return result
     except HTTPException:
@@ -123,6 +139,11 @@ async def call_llm(messages: list, tools_list=None, response_format=None, model=
 
 async def call_llm_stream(messages: list, tools_list=None, model=None):
     model = model or DEFAULT_MODEL
+    for m in messages:
+        if m.get("role") == "user" and m.get("content"):
+            injection = check_injection(m["content"])
+            if injection:
+                raise HTTPException(status_code=400, detail=injection)
     try:
         response, _ = await _call_with_fallback(
             lambda m: litellm.acompletion(
@@ -133,7 +154,7 @@ async def call_llm_stream(messages: list, tools_list=None, model=None):
             ),
             model=model,
         )
-        return response
+        return filter_stream(redact_stream(response))
     except HTTPException:
         raise
     except Exception as e:

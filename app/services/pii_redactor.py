@@ -15,3 +15,10 @@ def redact_pii(text: str) -> str:
     for pattern, replacement in _PII_PATTERNS:
         text = pattern.sub(replacement, text)
     return text
+
+
+async def redact_stream(stream):
+    async for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+            chunk.choices[0].delta.content = redact_pii(chunk.choices[0].delta.content)
+        yield chunk

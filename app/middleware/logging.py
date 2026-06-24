@@ -3,7 +3,7 @@ import time
 import uuid
 from fastapi import Request
 from app.services.pricing import calculate_cost
-from app.services.usage_tracker import set_request_id, pop_usage
+from app.services.usage_tracker import set_request_id, pop_usage, set_api_key
 from app.services.pii_redactor import redact_pii
 from app.services.metrics import (
     http_requests_total,
@@ -24,6 +24,8 @@ logger.addHandler(_handler)
 async def ai_usage_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
     set_request_id(request_id)
+    api_key = request.headers.get("X-API-KEY")
+    set_api_key(api_key)
     start_time = time.time()
 
     try:

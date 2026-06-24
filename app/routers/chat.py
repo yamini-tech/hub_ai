@@ -161,7 +161,10 @@ async def agent_sync(request: AIRequest):
     if message.tool_calls:
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
-            args = json.loads(tool_call.function.arguments)
+            try:
+                args = json.loads(tool_call.function.arguments)
+            except json.JSONDecodeError:
+                continue
             tool_result = ""
             if tool_name == "web_search":
                 tool_result = await web_search(args["query"])

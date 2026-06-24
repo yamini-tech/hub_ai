@@ -20,11 +20,20 @@ def _check_file_size(file_path: str):
         raise ValueError(f"File too large: {size} bytes (max {MAX_FILE_SIZE} bytes)")
 
 
+def _get_extension(file_path: str) -> str:
+    _, ext = os.path.splitext(file_path)
+    return ext.lower().lstrip(".")
+
+
 def extract_text(file_path: str, file_type: str) -> str:
     file_type = file_type.lower().lstrip(".")
 
     if file_type not in ("txt", "pdf", "docx", "png", "jpg", "jpeg"):
         raise ValueError(f"Unsupported file type: {file_type}")
+
+    actual_ext = _get_extension(file_path)
+    if actual_ext and actual_ext != file_type:
+        raise ValueError(f"File extension '{actual_ext}' does not match declared type '{file_type}'")
 
     safe_path = _sanitize_path(file_path)
     _check_file_size(safe_path)

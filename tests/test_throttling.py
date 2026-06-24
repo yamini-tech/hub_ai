@@ -2,7 +2,7 @@ import time
 import pytest
 from unittest.mock import patch, MagicMock
 import app.services.throttling as throttling_mod
-from app.services.throttling import get_token_count, is_request_allowed, check_rate_limit, _rate_windows
+from app.services.throttling import get_token_count, is_request_allowed, check_rate_limit, check_rate_limit_by_key, _rate_windows
 
 
 @pytest.fixture(autouse=True)
@@ -43,6 +43,44 @@ class TestIsRequestAllowed:
         assert allowed is False
         assert count == 15000
 
+    def test_empty_text_allowed(self, mock_tiktoken):
+        mock_enc = MagicMock()
+        mock_enc.encode.return_value = []
+        mock_tiktoken.encoding_for_model.return_value = mock_enc
+
+        allowed, count = is_request_allowed("", max_tokens=10000)
+        assert allowed is True
+        assert count == 0
+
+    def test_exact_limit_allowed(self, mock_tiktoken):
+        mock_enc = MagicMock()
+        mock_enc.encode.return_value = [1] * 10000
+        mock_tiktoken.encoding_for_model.return_value = mock_enc
+
+        allowed, count = is_request_allowed("x" * 5000, max_tokens=10000)
+        assert allowed is True
+        assert count == 10000
+
+    def test_one_over_limit_denied(self, mock_tiktoken):
+        mock_enc = MagicMock()
+        mock_enc.encode.return_value = [1] * 10001
+        mock_tiktoken.encoding_for_model.return_value = mock_enc
+
+        allowed, count = is_request_allowed("x" * 5000, max_tokens=10000)
+        assert allowed is False
+        assert count == 10001
+
+    def test_different_limits(self, mock_tiktoken):
+        mock_enc = MagicMock()
+        mock_enc.encode.return_value = [1] * 15000
+        mock_tiktoken.encoding_for_model.return_value = mock_enc
+
+        allowed_10k, _ = is_request_allowed("x" * 5000, max_tokens=10000)
+        assert allowed_10k is False
+
+        allowed_20k, _ = is_request_allowed("x" * 5000, max_tokens=20000)
+        assert allowed_20k is True
+
 
 class TestCheckRateLimit:
     def setup_method(self):
@@ -82,3 +120,36 @@ class TestCheckRateLimit:
         ok_b, count_b = check_rate_limit("session_b", window_sec=60, max_requests=5)
         assert ok_b is True
         assert count_b == 1
+
+
+class TestCheckRateLimitByKey:
+    def setup_method(self):
+        _rate_windows.clear()
+
+    def test_empty_key_returns_ok(self):
+        ok, count = check_rate_limit_by_key("")
+        assert ok is True
+        assert count == 0
+
+    def test_none_key_returns_ok(self):
+        ok, count = check_rate_limit_by_key(None)
+        assert ok is True
+        assert count == 0
+
+    def test_first_request_allowed(self):
+        ok, count = check_rate_limit_by_key("sk-test-key-12345", window_sec=60, max_requests=5)
+        assert ok is True
+        assert count == 1
+
+    def test_within_limit(self):
+        ok, count = check_rate_limit_by_key("sk-test-key-12345", window_sec=60, max_requests=5)
+        assert ok is True
+        ok, count = check_rate_limit_by_key("sk-test-key-12345", window_sec=60, max_requests=5)
+        assert ok is True
+        assert count == 2
+
+    def test_exceeds_limit(self):
+        _rate_windows["apikey:sk-test-"] = [time.time() - 1 for _ in range(5)]
+        ok, count = check_rate_limit_by_key("sk-test-key-12345", window_sec=60, max_requests=5)
+        assert ok is False
+        assert count == 5

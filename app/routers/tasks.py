@@ -100,5 +100,5 @@ async def parse_unstructured_sync(request: ParseRequest):
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": f"Parse the following unstructured text into structured data:{hint}\n\n{request.text}"},
     ]
-    res = await call_llm(messages, model=model)
+    res = await call_llm(messages, model=model, response_format={"type": "json_object"})
     return {"parsed": res.content}
