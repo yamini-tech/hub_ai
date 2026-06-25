@@ -113,10 +113,32 @@ class TestExtractText:
         with pytest.raises(FileNotFoundError):
             extract_text("/nonexistent/file.txt", "txt")
 
-    @pytest.mark.skip(reason="Requires PyMuPDF")
     def test_pdf_extraction(self):
-        pass
+        import fitz
+        text = "Hello from PyMuPDF"
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            doc = fitz.open()
+            page = doc.new_page()
+            page.insert_text((50, 50), text)
+            doc.save(path)
+            doc.close()
+            result = extract_text(path, "pdf")
+            assert text in result
+        finally:
+            os.unlink(path)
 
-    @pytest.mark.skip(reason="Requires python-docx")
     def test_docx_extraction(self):
-        pass
+        from docx import Document
+        text = "Hello from python-docx"
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            doc = Document()
+            doc.add_paragraph(text)
+            doc.save(path)
+            result = extract_text(path, "docx")
+            assert text in result
+        finally:
+            os.unlink(path)

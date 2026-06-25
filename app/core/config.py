@@ -44,7 +44,10 @@ TASK_MODEL_MAP = {
     "reasoning": MODEL_MAP.get("smart-hub-reasoner", MODEL_NAME),
     "parse": MODEL_MAP.get("smart-hub-parser", MODEL_NAME),
 }
-
+TEST_MODEL = os.getenv("SMARTHUB_TEST_MODEL", "")
+if TEST_MODEL:
+    TASK_MODEL_MAP = {k: TEST_MODEL for k in TASK_MODEL_MAP.keys()}
+    
 # Security
 API_KEY = os.getenv("SMARTHUB_API_KEY", "")
 API_KEY_ENABLED = bool(API_KEY)

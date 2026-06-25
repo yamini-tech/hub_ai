@@ -14,7 +14,7 @@ system_prompts:
     "You are an advanced reasoning AI. Think step by step and provide thorough analysis."
 
   agent:
-    "You are an expert AI assistant. Answer using ONLY the provided CONTEXT below. If the answer is in the context, state it clearly and directly.\n\n--- RETRIEVED CONTEXT ---\n{context}\n--- END OF CONTEXT ---\n"
+    "You are an expert AI assistant. Use the RETRIEVED CONTEXT below if relevant. If the context doesn't contain the answer, use your own knowledge to respond helpfully.\n\n--- RETRIEVED CONTEXT ---\n{context}\n--- END OF CONTEXT ---\n"
 
   hub_chat:
     "You are a helpful assistant. Use the following context to answer.\n\n--- CONTEXT ---\n{context}\n--- END CONTEXT ---\n"

@@ -2,6 +2,7 @@ import time
 import os
 import tiktoken
 from collections import defaultdict
+from app.services.usage_tracker import get_api_key
 
 # Per-session rate tracking (in-memory fallback)
 _rate_windows: dict[str, list[float]] = defaultdict(list)
@@ -39,11 +40,26 @@ def is_request_allowed(text: str, max_tokens: int = 10000) -> tuple[bool, int]:
     count = get_token_count(text)
     return count <= max_tokens, count
 
+def resolve_user_key(session_id: str) -> str:
+    api_key = get_api_key()
+    if api_key:
+        return f"user:{api_key[:8]}"
+    return f"session:{session_id}"
+
+
 def check_rate_limit(session_id: str, window_sec: int = 60, max_requests: int = 30) -> tuple[bool, int]:
     r = _get_rate_limiter()
     if r is not None:
         return _check_rate_limit_redis(r, session_id, window_sec, max_requests)
     return _check_rate_limit_memory(session_id, window_sec, max_requests)
+
+
+def check_rate_limit_by_user(session_id: str, window_sec: int = 60, max_requests: int = 30) -> tuple[bool, int]:
+    key = resolve_user_key(session_id)
+    r = _get_rate_limiter()
+    if r is not None:
+        return _check_rate_limit_redis(r, key, window_sec, max_requests)
+    return _check_rate_limit_memory(key, window_sec, max_requests)
 
 
 def check_rate_limit_by_key(api_key: str, window_sec: int = 60, max_requests: int = 30) -> tuple[bool, int]:

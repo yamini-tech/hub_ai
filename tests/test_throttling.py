@@ -2,7 +2,8 @@ import time
 import pytest
 from unittest.mock import patch, MagicMock
 import app.services.throttling as throttling_mod
-from app.services.throttling import get_token_count, is_request_allowed, check_rate_limit, check_rate_limit_by_key, _rate_windows
+from app.services.throttling import get_token_count, is_request_allowed, check_rate_limit, check_rate_limit_by_key, check_rate_limit_by_user, resolve_user_key, _rate_windows
+from app.services.usage_tracker import set_api_key
 
 
 @pytest.fixture(autouse=True)
@@ -120,6 +121,55 @@ class TestCheckRateLimit:
         ok_b, count_b = check_rate_limit("session_b", window_sec=60, max_requests=5)
         assert ok_b is True
         assert count_b == 1
+
+
+class TestResolveUserKey:
+    def setup_method(self):
+        from app.services.usage_tracker import api_key_var
+        api_key_var.set(None)
+
+    def test_without_api_key_returns_session_prefix(self):
+        assert resolve_user_key("sess1") == "session:sess1"
+
+    def test_with_api_key_returns_user_prefix(self):
+        set_api_key("sk-test-key-12345")
+        assert resolve_user_key("sess1") == "user:sk-test-"
+
+
+class TestCheckRateLimitByUser:
+    def setup_method(self):
+        _rate_windows.clear()
+        from app.services.usage_tracker import api_key_var
+        api_key_var.set(None)
+
+    def test_without_api_key_per_session(self):
+        ok_a, c_a = check_rate_limit_by_user("sess_a", window_sec=60, max_requests=5)
+        assert ok_a is True
+        assert c_a == 1
+        ok_b, c_b = check_rate_limit_by_user("sess_b", window_sec=60, max_requests=5)
+        assert ok_b is True
+        assert c_b == 1
+
+    def test_without_api_key_exceeds_limit(self):
+        _rate_windows["session:sess1"] = [time.time() - 1 for _ in range(5)]
+        ok, count = check_rate_limit_by_user("sess1", window_sec=60, max_requests=5)
+        assert ok is False
+        assert count == 5
+
+    def test_with_api_key_shared_across_sessions(self):
+        set_api_key("sk-test-key-12345")
+        ok, c = check_rate_limit_by_user("sess_a", window_sec=60, max_requests=5)
+        assert ok is True
+        ok, c = check_rate_limit_by_user("sess_b", window_sec=60, max_requests=5)
+        assert ok is True
+        assert c == 2
+
+    def test_with_api_key_exceeds_limit(self):
+        set_api_key("sk-test-key-12345")
+        _rate_windows["user:sk-test-"] = [time.time() - 1 for _ in range(5)]
+        ok, count = check_rate_limit_by_user("sess_any", window_sec=60, max_requests=5)
+        assert ok is False
+        assert count == 5
 
 
 class TestCheckRateLimitByKey:

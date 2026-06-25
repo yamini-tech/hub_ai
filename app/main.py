@@ -21,6 +21,8 @@ app = FastAPI(
     version="2.0.0",
 )
 
+app.middleware("http")(ai_usage_middleware)
+
 if CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
@@ -29,14 +31,6 @@ if CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-app = FastAPI(
-    title="SmartHub AI",
-    description="Unified AI microservice for SmartHub — summarization, parsing, chat, and agent capabilities with streaming.",
-    version="2.0.0",
-)
-
-app.middleware("http")(ai_usage_middleware)
 
 
 @app.middleware("http")
