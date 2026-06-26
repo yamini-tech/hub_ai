@@ -79,7 +79,7 @@ async def agent_endpoint(request: AIRequest):
                     delta = chunk.choices[0].delta
                     if delta.content:
                         full_content += delta.content
-                        yield f"data: {json.dumps({'token': delta.content})}\n\n"
+                        yield f"data: {json.dumps({'delta': delta.content})}\n\n"
                     if delta.tool_calls:
                         for tc in delta.tool_calls:
                             if len(tool_calls_buffer) <= tc.index:
@@ -110,7 +110,7 @@ async def agent_endpoint(request: AIRequest):
                     async for chunk in stream2:
                         if content := chunk.choices[0].delta.content:
                             full_content += content
-                            yield f"data: {json.dumps({'token': content})}\n\n"
+                            yield f"data: {json.dumps({'delta': content})}\n\n"
             except TimeoutError:
                 yield 'data: {"error": "stream_timeout"}\n\n'
         messages.append({"role": "assistant", "content": full_content})

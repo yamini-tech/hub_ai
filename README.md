@@ -20,6 +20,16 @@ uvicorn app.main:app --host 0.0.0.0 --port 8003 --reload
 curl http://localhost:8003/
 ```
 
+### Docker
+
+```bash
+# Build
+docker build -t hub-ai-brain .
+
+# Run (pass env vars or mount .env)
+docker run -p 8003:8003 --env-file .env hub-ai-brain
+```
+
 ## How SmartHub Integrates (The Abstraction Layer)
 
 SmartHub calls the Brain. The Brain calls the LLM. SmartHub never touches a model API.
@@ -159,6 +169,9 @@ Async background processing with job status polling.
 | `ANTHROPIC_API_KEY` | (required for Anthropic) | Anthropic API key |
 | `HUGGINGFACE_API_KEY` | (required for HF TGI) | HuggingFace token |
 | `HUGGINGFACE_API_BASE` | (required for HF TGI) | HuggingFace TGI endpoint |
+| `AZURE_API_KEY` | (required for Azure) | Azure OpenAI API key |
+| `AZURE_API_BASE` | (required for Azure) | Azure OpenAI endpoint |
+| `AZURE_API_VERSION` | `2023-05-15` | Azure OpenAI API version |
 
 ### Model Config (`config/config.yaml`)
 
@@ -181,6 +194,16 @@ model_list:
       model: huggingface/meta-llama/Meta-Llama-3-8B-Instruct
       api_base: os.environ/HUGGINGFACE_API_BASE
       api_key: os.environ/HUGGINGFACE_API_KEY
+
+general_settings:
+  master_key: "sk-smarthub-test-master-key"  # litellm proxy key (testing only)
+  database_url: "sqlite:///litellm.db"
+
+fallback_chains:
+  gpt-4o: ["gpt-4o-mini", "ollama/llama3.2"]
+  claude-3-5-sonnet: ["claude-3-7-sonnet", "gpt-4o-mini", "ollama/llama3.2"]
+  claude-3-7-sonnet: ["gpt-4o-mini", "ollama/llama3.2"]
+  ollama/llama3.2: []
 ```
 
 ### System Prompts (`config/system_prompts.yaml`)
@@ -191,7 +214,9 @@ system_prompts:
   summarize: "You are a precise summarizer..."
   parse: "You extract structured data from unstructured text..."
   chat: "You are a helpful assistant."
+  reasoning: "You are an advanced reasoning AI. Think step by step..."
   agent: "You are an expert AI assistant. Answer using ONLY the provided CONTEXT below..."
+  hub_chat: "You are a helpful assistant. Use the following context to answer..."
 ```
 
 ## How Model Routing Works
@@ -227,17 +252,22 @@ hub_ai/
 │   │   ├── document_extractor.py# Text extraction (txt, pdf, docx, images)
 │   │   ├── memory_manager.py    # Knowledge base read/write/summarize
 │   │   ├── search_service.py    # Web search via DuckDuckGo
-│   │   ├── embedding_service.py # Sentence-transformer embeddings
 │   │   ├── job_manager.py       # Job queue (Redis with in-memory fallback)
 │   │   ├── task_processor.py    # Async background task runner
-│   │   └── pricing.py           # Cost calculation per model
+│   │   ├── pricing.py           # Cost calculation per model
+│   │   ├── cache.py             # LLM response cache with TTL
+│   │   ├── content_filter.py    # Response content safety filtering
+│   │   ├── injection_detector.py# Prompt injection detection
+│   │   ├── metrics.py           # Prometheus metrics endpoint
+│   │   ├── pii_redactor.py      # PII redaction for LLM responses
+│   │   └── usage_tracker.py     # Per-request token & cost tracking
 │   └── middleware/
 │       └── logging.py           # AI usage logging middleware
 ├── config/
 │   ├── config.yaml              # Model definitions
 │   └── system_prompts.yaml      # Prompt templates per task
 ├── chroma_db/                   # Vector database (auto-generated)
-├── tests/                       # Test suite (152 tests, pytest)
+├── tests/                       # Test suite (256 tests, pytest)
 │   ├── conftest.py              # Shared fixtures, mocks for heavy deps
 │   ├── test_schemas.py          # Pydantic model validation tests
 │   ├── test_throttling.py       # Token counting & rate limit tests
@@ -246,6 +276,11 @@ hub_ai/
 │   ├── test_pricing.py          # Cost calculation tests
 │   ├── test_security.py         # API key verification tests
 │   ├── test_config.py           # Configuration loading tests
+│   ├── test_cache.py            # LLM response cache tests
+│   ├── test_content_filter.py   # Content safety filter tests
+│   ├── test_injection_detector.py # Prompt injection detection tests
+│   ├── test_pii_redactor.py     # PII redaction tests
+│   ├── test_usage_tracker.py    # Usage tracking tests
 │   ├── test_job_manager.py      # Job & chat history CRUD tests
 │   ├── test_vector_store.py     # Chunk text edge case tests
 │   ├── test_document_extractor.py # Text extraction tests
@@ -271,6 +306,9 @@ hub_ai/
 | `chromadb` | Vector database for RAG |
 | `sentence-transformers` | Text embeddings (all-MiniLM-L6-v2) |
 | `tiktoken` | Token counting |
+| `pydantic` | Request/response model validation |
+| `redis` | Multi-worker rate limiting backend |
+| `prometheus-client` | Metrics endpoint (`/metrics`) |
 | `PyMuPDF` | PDF text extraction |
 | `python-docx` | DOCX text extraction |
 | `Pillow` + `pytesseract` | Image OCR (requires `brew install tesseract`) |
