@@ -109,11 +109,15 @@ async def agent_endpoint(request: AIRequest):
                 async with asyncio.timeout(120):
                     async for chunk in stream2:
                         if content := chunk.choices[0].delta.content:
+                            full_content += content
                             yield f"data: {json.dumps({'token': content})}\n\n"
             except TimeoutError:
                 yield 'data: {"error": "stream_timeout"}\n\n'
         messages.append({"role": "assistant", "content": full_content})
         _trim_session(session_id)
+        if request.cross_session and full_content:
+            exchange = f"[session:{session_id}] User: {request.text[:200]} | Assistant: {full_content[:500]}"
+            await asyncio.to_thread(save_to_knowledge_base, exchange)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -188,10 +192,16 @@ async def agent_sync(request: AIRequest):
         final_answer = final_response.choices[0].message.content
         messages.append({"role": "assistant", "content": final_answer})
         _trim_session(session_id)
+        if request.cross_session and final_answer:
+            exchange = f"[session:{session_id}] User: {request.text[:200]} | Assistant: {final_answer[:500]}"
+            await asyncio.to_thread(save_to_knowledge_base, exchange)
         return {"answer": final_answer}
 
     messages.append({"role": "assistant", "content": message.content})
     _trim_session(session_id)
+    if request.cross_session and message.content:
+        exchange = f"[session:{session_id}] User: {request.text[:200]} | Assistant: {message.content[:500]}"
+        await asyncio.to_thread(save_to_knowledge_base, exchange)
     return {"answer": message.content}
 
 @router.post("/ai/process", status_code=202)

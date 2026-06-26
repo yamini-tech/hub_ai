@@ -1,5 +1,6 @@
 import time
 import os
+import uuid
 import tiktoken
 from collections import defaultdict
 from app.services.usage_tracker import get_api_key
@@ -74,12 +75,13 @@ def check_rate_limit_by_key(api_key: str, window_sec: int = 60, max_requests: in
 
 def _check_rate_limit_redis(r, session_id: str, window_sec: int, max_requests: int) -> tuple[bool, int]:
     key = f"rate:{session_id}"
+    member = f"{int(time.time())}:{uuid.uuid4().hex[:8]}"
     now = int(time.time())
     window_start = now - window_sec
     pipe = r.pipeline()
     pipe.zremrangebyscore(key, 0, window_start)
     pipe.zcard(key)
-    pipe.zadd(key, {str(now): now})
+    pipe.zadd(key, {member: now})
     pipe.expire(key, window_sec)
     results = pipe.execute()
     count = int(results[1]) + 1

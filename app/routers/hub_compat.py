@@ -17,21 +17,17 @@ from app.services.model_selector import select_model
 from app.services.prompt_manager import get_system_prompt
 from app.core.security import verify_api_key
 from app.core.config import API_KEY_ENABLED, RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX_REQUESTS
-from app.services.throttling import check_rate_limit
+from app.services.throttling import check_rate_limit_by_user
 
 router = APIRouter()
 _hub_deps = [Depends(verify_api_key)] if API_KEY_ENABLED else []
-
-
-def _rl_key(user_id: str, endpoint: str) -> str:
-    return f"hub:{endpoint}:{user_id or 'anonymous'}"
 
 
 @router.post("/api/v1/chat/stream", dependencies=_hub_deps)
 async def chat_stream(payload: ChatStreamRequest):
     if not payload.messages:
         raise HTTPException(status_code=400, detail="messages is required")
-    rate_ok, req_count = check_rate_limit(_rl_key(payload.user_id, "chat_stream"), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(payload.user_id or "anonymous", window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -66,7 +62,7 @@ async def chat_stream(payload: ChatStreamRequest):
 
 @router.post("/api/v1/embed", dependencies=_hub_deps)
 async def embed_text(payload: EmbedRequest):
-    rate_ok, req_count = check_rate_limit(_rl_key(payload.user_id, "embed"), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(payload.user_id or "anonymous", window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
     embedding = get_embedding(payload.text)
@@ -75,7 +71,7 @@ async def embed_text(payload: EmbedRequest):
 
 @router.post("/api/v1/extract", dependencies=_hub_deps)
 async def extract_document(payload: ExtractRequest):
-    rate_ok, req_count = check_rate_limit(_rl_key(payload.user_id, "extract"), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(payload.user_id or "anonymous", window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
     try:
@@ -91,7 +87,7 @@ async def extract_document(payload: ExtractRequest):
 
 @router.post("/api/v1/rag/ingest", dependencies=_hub_deps)
 async def rag_ingest(payload: RagIngestRequest):
-    rate_ok, req_count = check_rate_limit(_rl_key(payload.user_id, "rag_ingest"), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(payload.user_id or "anonymous", window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
     chunks = chunk_text(payload.text)
@@ -101,7 +97,7 @@ async def rag_ingest(payload: RagIngestRequest):
 
 @router.post("/api/v1/rag/retrieve", dependencies=_hub_deps)
 async def rag_retrieve(payload: RagRetrieveRequest):
-    rate_ok, req_count = check_rate_limit(_rl_key(payload.user_id, "rag_retrieve"), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(payload.user_id or "anonymous", window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
     chunks = retrieve_chunks(payload.query, payload.user_id, top_k=payload.top_k)
@@ -112,7 +108,7 @@ async def rag_retrieve(payload: RagRetrieveRequest):
 async def rag_delete(document_id: str, user_id: str):
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id query parameter is required")
-    rate_ok, req_count = check_rate_limit(_rl_key(user_id, "rag_delete"), window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(user_id or "anonymous", window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
     count = delete_document_chunks(document_id, user_id)

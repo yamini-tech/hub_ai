@@ -6,6 +6,7 @@ class AIRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=50000, description="Input text for processing")
     session_id: str = "default_session"
     task_type: str = "chat"
+    cross_session: bool = False
 
 class SummarizeRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=100000, description="Text to summarize")

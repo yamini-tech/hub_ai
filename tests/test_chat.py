@@ -1,8 +1,49 @@
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock
 import json
 
 
 class TestAgentEndpoint:
+    async def _mock_stream(self, messages, tools_list=None, model=None):
+        async def generate():
+            delta = MagicMock()
+            delta.content = "test chunk"
+            delta.tool_calls = None
+            chunk = MagicMock()
+            chunk.choices = [MagicMock()]
+            chunk.choices[0].delta = delta
+            yield chunk
+        return generate()
+
+    def test_agent_stream_cross_session_stores_exchange(self, client, mock_tiktoken):
+        from unittest.mock import patch, MagicMock
+        with patch("app.routers.chat.call_llm_stream", new=self._mock_stream):
+            with patch("app.routers.chat.save_to_knowledge_base") as mock_save:
+                response = client.post(
+                    "/api/agent",
+                    json={"text": "Hello", "session_id": "test_sess", "cross_session": True},
+                )
+                assert response.status_code == 200
+                body = b"".join(response.iter_bytes())
+                assert b"[DONE]" in body
+                mock_save.assert_called_once()
+                call_arg = mock_save.call_args[0][0]
+                assert "[session:test_sess]" in call_arg
+                assert "User: Hello" in call_arg
+                assert "Assistant:" in call_arg
+
+    def test_agent_stream_cross_session_false_does_not_store(self, client, mock_tiktoken):
+        from unittest.mock import patch
+        with patch("app.routers.chat.call_llm_stream", new=self._mock_stream):
+            with patch("app.routers.chat.save_to_knowledge_base") as mock_save:
+                response = client.post(
+                    "/api/agent",
+                    json={"text": "Hello", "session_id": "test_sess"},
+                )
+                assert response.status_code == 200
+                body = b"".join(response.iter_bytes())
+                assert b"[DONE]" in body
+                mock_save.assert_not_called()
+
     def test_agent_remember_command(self, client, mock_tiktoken):
         mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
 
@@ -35,28 +76,29 @@ class TestAgentEndpoint:
 
 
 class TestAgentSyncEndpoint:
-    @patch("app.routers.chat.litellm")
-    def test_agent_sync_handles_malformed_tool_args(self, mock_litellm, client, mock_tiktoken):
-        mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
-        mock_message = MagicMock()
-        mock_message.content = None
-        mock_message.tool_calls = [
-            MagicMock(
-                id="call_1",
-                function=MagicMock(name="web_search", arguments="not valid json{{{")
-            )
-        ]
-        mock_choice = MagicMock()
-        mock_choice.message = mock_message
-        mock_litellm.acompletion = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
+    def test_agent_sync_handles_malformed_tool_args(self, client, mock_tiktoken):
+        from unittest.mock import patch
+        with patch("app.routers.chat.litellm") as mock_litellm:
+            mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
+            mock_message = MagicMock()
+            mock_message.content = None
+            mock_message.tool_calls = [
+                MagicMock(
+                    id="call_1",
+                    function=MagicMock(name="web_search", arguments="not valid json{{{")
+                )
+            ]
+            mock_choice = MagicMock()
+            mock_choice.message = mock_message
+            mock_litellm.acompletion = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
 
-        response = client.post(
-            "/api/agent/sync",
-            json={"text": "Hello", "session_id": "test_sess"},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert "answer" in data
+            response = client.post(
+                "/api/agent/sync",
+                json={"text": "Hello", "session_id": "test_sess"},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert "answer" in data
 
     def test_agent_sync_remember(self, client, mock_tiktoken):
         mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
@@ -77,6 +119,36 @@ class TestAgentSyncEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "answer" in data
+
+    def test_agent_sync_cross_session_stores_exchange(self, client, mock_litellm_acompletion, mock_tiktoken):
+        from unittest.mock import patch
+        mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
+        with patch("app.routers.chat.save_to_knowledge_base") as mock_save:
+            response = client.post(
+                "/api/agent/sync",
+                json={"text": "Hello", "session_id": "test_sess", "cross_session": True},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert "answer" in data
+            mock_save.assert_called_once()
+            call_arg = mock_save.call_args[0][0]
+            assert "[session:test_sess]" in call_arg
+            assert "User: Hello" in call_arg
+            assert "test response" in call_arg
+
+    def test_agent_sync_cross_session_false_does_not_store(self, client, mock_litellm_acompletion, mock_tiktoken):
+        from unittest.mock import patch
+        mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
+        with patch("app.routers.chat.save_to_knowledge_base") as mock_save:
+            response = client.post(
+                "/api/agent/sync",
+                json={"text": "Hello", "session_id": "test_sess"},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert "answer" in data
+            mock_save.assert_not_called()
 
     def test_agent_sync_exceeds_token_limit(self, client, mock_tiktoken):
         mock_enc = MagicMock()

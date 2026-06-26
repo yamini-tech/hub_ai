@@ -40,10 +40,19 @@ def add_to_memory(text: str):
     col = _get_collection()
     col.add(documents=[text], ids=[doc_id])
 
-def query_memory(query: str, n_results: int = 3) -> str:
+def query_memory(query: str, n_results: int = 3, min_score: float = 0.7) -> str:
     col = _get_collection()
     results = col.query(query_texts=[query], n_results=n_results)
     if results['documents'] and results['documents'][0]:
+        distances = results.get('distances')
+        if distances and distances[0]:
+            relevant = [
+                doc for doc, dist in zip(results['documents'][0], distances[0])
+                if dist <= min_score
+            ]
+            if relevant:
+                return "\n".join(relevant)
+            return "No relevant context found."
         return "\n".join(results['documents'][0])
     return "No relevant context found."
 
