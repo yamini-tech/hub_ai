@@ -1,10 +1,9 @@
 import asyncio
 import json
-import litellm
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from app.schemas import AIRequest
-from app.services.llm_client import call_llm_stream, tools
+from app.services.llm_client import call_llm, call_llm_stream, tools
 from app.services.memory_manager import read_knowledge_base, save_to_knowledge_base, summarize_knowledge
 from app.services.search_service import web_search
 from app.services.task_processor import run_llm_task
@@ -158,14 +157,7 @@ async def agent_sync(request: AIRequest):
     messages.append({"role": "user", "content": request.text})
     _trim_session(session_id)
 
-    response = await litellm.acompletion(
-        model=model,
-        messages=messages,
-        tools=tools,
-        tool_choice="auto"
-    )
-
-    message = response.choices[0].message
+    message = await call_llm(messages, model=model, tools_list=tools)
     messages.append(message)
 
     if message.tool_calls:
@@ -185,11 +177,8 @@ async def agent_sync(request: AIRequest):
                 "tool_call_id": tool_call.id,
                 "content": str(tool_result)
             })
-        final_response = await litellm.acompletion(
-            model=model,
-            messages=messages
-        )
-        final_answer = final_response.choices[0].message.content
+        final_message = await call_llm(messages, model=model)
+        final_answer = final_message.content
         messages.append({"role": "assistant", "content": final_answer})
         _trim_session(session_id)
         if request.cross_session and final_answer:

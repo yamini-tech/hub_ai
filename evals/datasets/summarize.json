@@ -1,0 +1,59 @@
+{
+  "task": "summarize",
+  "description": "Evaluates summarization quality — conciseness, fact preservation, length.",
+  "endpoint": "/api/ai/summarize/sync",
+  "method": "POST",
+  "response_key": "summary",
+  "cases": [
+    {
+      "id": "summ-001",
+      "input": "Artificial intelligence (AI) is a branch of computer science that aims to create machines capable of intelligent behavior. Modern AI techniques include machine learning, where systems learn from data rather than being explicitly programmed. In recent years, deep learning — a subset of machine learning using multi-layered neural networks — has driven breakthroughs in image recognition, natural language processing, and game playing. Businesses across every sector are adopting AI to automate processes, gain insights from data, and improve customer experiences. However, concerns about job displacement, algorithmic bias, and privacy continue to spark debate among policymakers and the public.",
+      "expected": {
+        "min_length_chars": 30,
+        "must_contain": ["AI", "machine learning"],
+        "must_not_contain": ["hallucination"],
+        "judge_criteria": "Is the summary concise (under 3 sentences), factually accurate, and does it preserve the key topics: AI definition, machine learning, deep learning breakthroughs, business adoption, and societal concerns?"
+      }
+    },
+    {
+      "id": "summ-002",
+      "input": "The Great Barrier Reef, located off the coast of Queensland, Australia, is the world's largest coral reef system. It stretches over 2,300 kilometers and comprises nearly 3,000 individual reef systems. The reef is home to an extraordinary diversity of life, including 1,500 species of fish, 400 types of coral, and numerous species of birds, dolphins, and sea turtles. Climate change poses the most significant threat to the reef, with rising ocean temperatures causing coral bleaching events that have damaged large portions of the ecosystem. The Australian government has committed billions of dollars to conservation efforts, including water quality improvement programs and research into coral restoration techniques.",
+      "expected": {
+        "min_length_chars": 25,
+        "must_contain": ["Great Barrier Reef", "coral"],
+        "must_not_contain": ["Australia's capital"],
+        "judge_criteria": "Is the summary concise, factually accurate, and does it mention the reef's location, size, biodiversity, and the threat of climate change?"
+      }
+    },
+    {
+      "id": "summ-003",
+      "input": "Python is a high-level, interpreted programming language known for its readability and versatility. Created by Guido van Rossum and first released in 1991, Python emphasizes code readability through its use of significant indentation. It supports multiple programming paradigms, including procedural, object-oriented, and functional programming. Python's extensive standard library and large ecosystem of third-party packages — such as NumPy for numerical computing, Django for web development, and PyTorch for machine learning — make it one of the most popular languages across domains including data science, web development, automation, and education.",
+      "expected": {
+        "min_length_chars": 20,
+        "must_contain": ["Python", "programming"],
+        "must_not_contain": ["JavaScript"],
+        "judge_criteria": "Is the summary concise and does it correctly cover Python's key traits: readability, creator, paradigms, popular libraries, and use cases?"
+      }
+    },
+    {
+      "id": "summ-004",
+      "input": "Brazil's capital city, Brasília, is a planned city inaugurated on April 21, 1960. Designed by architect Oscar Niemeyer and urban planner Lúcio Costa, the city is shaped like an airplane when viewed from above. Brasília is a UNESCO World Heritage site, recognized for its modernist architecture and innovative urban planning. The city has a population of approximately 3 million people, making it the third-largest city in Brazil. Its economy is driven primarily by government services, as it houses the federal government's three branches: executive, legislative, and judicial.",
+      "expected": {
+        "min_length_chars": 20,
+        "must_contain": ["Brasília", "Brazil"],
+        "must_not_contain": ["Rio de Janeiro"],
+        "judge_criteria": "Is the summary concise and does it correctly identify Brasília as Brazil's capital, its planned design, UNESCO status, and government-focused economy?"
+      }
+    },
+    {
+      "id": "summ-005",
+      "input": "In a surprising turn of events, scientists at the European Organization for Nuclear Research (CERN) announced Tuesday that they have observed a new subatomic particle that does not fit within the Standard Model of particle physics. The discovery, made using the Large Hadron Collider, could force physicists to fundamentally revise their understanding of how the universe works at the most basic level. 'This is truly unexpected,' said Dr. Elena Martinez, lead researcher on the project. 'We've been analyzing the data for six months to rule out any measurement errors.' The findings have been submitted for peer review and are expected to generate intense debate within the physics community.",
+      "expected": {
+        "min_length_chars": 25,
+        "must_contain": ["CERN", "particle"],
+        "must_not_contain": ["Martinez said personally"],
+        "judge_criteria": "Is the summary concise and does it accurately convey: the discovery at CERN, the challenge to the Standard Model, the use of the Large Hadron Collider, and the peer review context?"
+      }
+    }
+  ]
+}

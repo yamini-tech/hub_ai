@@ -1,10 +1,9 @@
 import asyncio
 import json
-import litellm
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
 from app.schemas import GatewayRequest, TaskType
-from app.services.llm_client import call_llm_stream, tools
+from app.services.llm_client import call_llm, call_llm_stream, tools
 from app.services.memory_manager import read_knowledge_base
 from app.services.search_service import web_search
 from app.services.throttling import is_request_allowed, check_rate_limit_by_user
@@ -100,13 +99,8 @@ async def _handle_agent(request: GatewayRequest):
             _agent_stream(messages, request.text, model),
             media_type="text/event-stream",
         )
-    response = await litellm.acompletion(
-        model=model,
-        messages=messages,
-        tools=tools,
-        tool_choice="auto",
-    )
-    return {"answer": response.choices[0].message.content}
+    response = await call_llm(messages, model=model, tools_list=tools)
+    return {"answer": response.content}
 
 async def _handle_process(request: GatewayRequest, background_tasks: BackgroundTasks):
     job_id = create_job()

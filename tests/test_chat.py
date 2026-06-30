@@ -77,8 +77,8 @@ class TestAgentEndpoint:
 
 class TestAgentSyncEndpoint:
     def test_agent_sync_handles_malformed_tool_args(self, client, mock_tiktoken):
-        from unittest.mock import patch
-        with patch("app.routers.chat.litellm") as mock_litellm:
+        from unittest.mock import patch, AsyncMock, MagicMock
+        with patch("app.routers.chat.call_llm") as mock_call_llm:
             mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
             mock_message = MagicMock()
             mock_message.content = None
@@ -88,9 +88,7 @@ class TestAgentSyncEndpoint:
                     function=MagicMock(name="web_search", arguments="not valid json{{{")
                 )
             ]
-            mock_choice = MagicMock()
-            mock_choice.message = mock_message
-            mock_litellm.acompletion = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
+            mock_call_llm.return_value = mock_message
 
             response = client.post(
                 "/api/agent/sync",

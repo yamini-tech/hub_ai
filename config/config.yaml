@@ -1,8 +1,9 @@
 model_list:
   - model_name: smart-hub-summarizer
     litellm_params:
-      model: openai/gpt-4o
-      api_key: os.environ/OPENAI_API_KEY
+      model: ollama/llama3.2
+      # model: openai/gpt-4o
+      # api_key: os.environ/OPENAI_API_KEY
   - model_name: smart-hub-parser
     litellm_params:
       model: anthropic/claude-3-5-sonnet
