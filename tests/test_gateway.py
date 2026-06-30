@@ -32,9 +32,13 @@ class TestGateway:
         assert response.status_code == 200
 
     def test_gateway_parse_sync(self, client, mock_litellm_acompletion, mock_tiktoken):
-        mock_msg = MagicMock()
-        mock_msg.content = '{"parsed": "data"}'
-        mock_litellm_acompletion.return_value.choices[0].message = mock_msg
+        async def _mock_stream():
+            chunk = MagicMock()
+            chunk.choices = [MagicMock()]
+            chunk.choices[0].delta.content = '{"parsed": "data"}'
+            yield chunk
+
+        mock_litellm_acompletion.return_value = _mock_stream()
 
         response = client.post(
             "/api/ai/gateway",
@@ -42,7 +46,7 @@ class TestGateway:
         )
         assert response.status_code == 200
         data = response.json()
-        assert "parsed" in data
+        assert data["parsed"] == {"parsed": "data"}
 
     def test_gateway_agent_stream(self, client, mock_litellm_acompletion, mock_tiktoken):
         response = client.post(

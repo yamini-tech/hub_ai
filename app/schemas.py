@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from enum import Enum
 
 class AIRequest(BaseModel):
@@ -15,6 +15,7 @@ class SummarizeRequest(BaseModel):
 class ParseRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=100000, description="Unstructured text to parse")
     schema_hint: Optional[str] = Field(None, max_length=500, description="Optional hint about the desired output structure")
+    json_schema: Optional[Dict[str, Any]] = Field(None, description="Optional JSON Schema to validate parsed output against")
     session_id: str = Field("default_session", description="Session ID for rate limiting")
 
 class SentimentResponse(BaseModel):
@@ -34,6 +35,7 @@ class GatewayRequest(BaseModel):
     session_id: str = Field("default_session", description="Session ID for conversation continuity")
     stream: bool = Field(True, description="If true, returns SSE streaming response")
     schema_hint: Optional[str] = Field(None, max_length=500, description="Hint for parse task output structure")
+    json_schema: Optional[Dict[str, Any]] = Field(None, description="Optional JSON Schema to validate parsed output against")
 
 class ChatStreamRequest(BaseModel):
     messages: list[dict] = Field(..., min_length=1, description="List of chat messages")

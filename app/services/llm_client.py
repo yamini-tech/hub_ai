@@ -137,7 +137,7 @@ async def call_llm(messages: list, tools_list=None, response_format=None, model=
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def call_llm_stream(messages: list, tools_list=None, model=None):
+async def call_llm_stream(messages: list, tools_list=None, model=None, response_format=None):
     model = model or DEFAULT_MODEL
     for m in messages:
         if m.get("role") == "user" and m.get("content"):
@@ -150,6 +150,7 @@ async def call_llm_stream(messages: list, tools_list=None, model=None):
                 model=m,
                 messages=messages,
                 tools=tools_list,
+                response_format=response_format,
                 stream=True,
             ),
             model=model,

@@ -67,7 +67,7 @@ class TestCallLlmStream:
         mock_litellm.acompletion.assert_called_with(
             model="ollama/llama3.2",
             messages=[{"role": "user", "content": "Hi"}],
-            tools=None, stream=True,
+            tools=None, response_format=None, stream=True,
         )
 
     @patch("app.services.llm_client.litellm")

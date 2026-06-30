@@ -59,11 +59,17 @@ class TestParseEndpoint:
         assert "parsed" in data
 
     def test_parse_with_schema_hint(self, client, mock_litellm_acompletion, mock_tiktoken):
+        mock_msg = MagicMock()
+        mock_msg.content = '{"parsed": "data"}'
+        mock_litellm_acompletion.return_value.choices[0].message = mock_msg
+
         response = client.post(
             "/api/ai/parse/sync",
             json={"text": "Parse this.", "schema_hint": "JSON"},
         )
         assert response.status_code == 200
+        data = response.json()
+        assert "parsed" in data
 
     def test_parse_exceeds_token_limit(self, client, mock_tiktoken):
         mock_enc = MagicMock()

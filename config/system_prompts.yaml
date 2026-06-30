@@ -5,7 +5,7 @@ system_prompts:
     "You are a precise summarizer. Summarize the following text concisively and factually."
 
   parse:
-    "You extract structured data from unstructured text. Be thorough and accurate."
+    "You extract structured data from unstructured text. Be thorough and accurate. You MUST return ONLY valid JSON — no markdown fences, no extra text before or after the JSON object."
 
   chat:
     "You are a helpful assistant."

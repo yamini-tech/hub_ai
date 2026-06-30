@@ -12,6 +12,7 @@ from app.services.job_manager import create_job
 from app.services.task_processor import run_llm_task
 from app.services.model_selector import select_model
 from app.services.prompt_manager import get_system_prompt
+from app.services.json_validator import validate_json_output
 from app.core.security import verify_api_key
 from app.core.config import API_KEY_ENABLED, MODEL_NAME, API_BASE, MAX_TOKENS_GATEWAY, RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX_REQUESTS
 
@@ -59,18 +60,32 @@ async def _handle_parse(request: GatewayRequest):
     model = select_model("parse", request.text)
     system_prompt = get_system_prompt("parse")
     hint = f"\nDesired structure hint: {request.schema_hint}" if request.schema_hint else ""
+    schema_instruction = ""
+    if request.json_schema:
+        schema_instruction = f"\nThe response MUST conform to this JSON Schema:\n{json.dumps(request.json_schema, indent=2)}"
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Parse the following unstructured text into structured data:{hint}\n\n{request.text}"},
+        {"role": "user", "content": f"Parse the following unstructured text into structured data:{hint}{schema_instruction}\n\n{request.text}"},
     ]
+    if request.json_schema:
+        response_format = {"type": "json_schema", "json_schema": {"name": "parsed_output", "schema": request.json_schema, "strict": True}}
+    else:
+        response_format = {"type": "json_object"}
+
     if request.stream:
-        return StreamingResponse(_stream(messages, model), media_type="text/event-stream")
-    res = await call_llm_stream(messages, model=model)
+        return StreamingResponse(
+            _stream(messages, model, response_format=response_format),
+            media_type="text/event-stream",
+        )
+    stream = await call_llm_stream(messages, model=model, response_format=response_format)
     content = ""
-    async for chunk in res:
+    async for chunk in stream:
         if c := chunk.choices[0].delta.content:
             content += c
-    return {"parsed": content}
+    valid, error, parsed = validate_json_output(content, schema=request.json_schema)
+    if not valid:
+        raise HTTPException(status_code=422, detail=f"Parse output validation failed: {error}")
+    return {"parsed": parsed}
 
 async def _handle_agent(request: GatewayRequest):
     model = select_model("agent", request.text)
@@ -101,8 +116,8 @@ async def _handle_process(request: GatewayRequest, background_tasks: BackgroundT
     return {"job_id": job_id, "status": "processing"}
 
 
-async def _stream(messages: list, model: str = ""):
-    stream = await call_llm_stream(messages, model=model or None)
+async def _stream(messages: list, model: str = "", response_format=None):
+    stream = await call_llm_stream(messages, model=model or None, response_format=response_format)
     try:
         async with asyncio.timeout(120):
             async for chunk in stream:
