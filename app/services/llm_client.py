@@ -7,7 +7,7 @@ from app.services.cache import get_cache, set_cache
 from app.services.pii_redactor import redact_pii, redact_stream
 from app.services.injection_detector import check_injection
 from app.services.content_filter import check_content, filter_stream, _BLOCKED_RESPONSE
-from app.core.config import FALLBACK_CHAINS
+from app.services.config_watcher import get_config_watcher
 
 RETRY_MAX = 3
 RETRY_BASE_DELAY = 1.0
@@ -46,10 +46,7 @@ _RETRYABLE = (TimeoutException, ConnectError, litellm.RateLimitError)
 
 
 def _get_fallback_models(model: str) -> list[str]:
-    for prefix, fallbacks in FALLBACK_CHAINS.items():
-        if model.startswith(prefix) or model.endswith(prefix):
-            return fallbacks
-    return []
+    return get_config_watcher().get_fallback(model)
 
 
 async def _call_with_retry(coro_factory):

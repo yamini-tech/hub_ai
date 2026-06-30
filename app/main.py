@@ -1,4 +1,5 @@
 import os
+import asyncio
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -9,7 +10,7 @@ from app.routers.gateway import router as gateway_router
 from app.routers.hub_compat import router as hub_compat_router
 from app.middleware.logging import ai_usage_middleware
 from app.core.security import verify_api_key
-from app.core.config import API_KEY_ENABLED
+from app.core.config import API_KEY_ENABLED, reload_config, poll_config
 from app.services.prompt_manager import load_prompts, _PROMPTS
 
 MAX_REQUEST_SIZE = int(os.getenv("SMARTHUB_MAX_REQUEST_SIZE", str(10 * 1024 * 1024)))
@@ -94,10 +95,23 @@ async def ready():
 @app.on_event("startup")
 async def startup_event():
     load_prompts()
+    asyncio.create_task(_config_poll_loop())
     print("--- SmartHub Intelligence Brain is Online ---")
     for route in app.routes:
         if isinstance(route, APIRoute):
             print(f"  {list(route.methods)} {route.path}")
+
+
+async def _config_poll_loop():
+    """Background task that polls config.yaml for changes every
+    POLL_INTERVAL_SEC seconds and hot-reloads model routing."""
+    from app.services.config_watcher import POLL_INTERVAL_SEC
+    while True:
+        await asyncio.sleep(POLL_INTERVAL_SEC)
+        try:
+            poll_config()
+        except Exception:
+            pass
 
 
 @app.on_event("shutdown")
@@ -105,6 +119,13 @@ async def shutdown_event():
     from app.services.vector_store import _cleanup
     _cleanup()
     print("--- SmartHub Intelligence Brain shut down gracefully ---")
+
+@app.post("/admin/config/reload", dependencies=deps)
+async def admin_reload_config():
+    """Force a hot-reload of config.yaml without restarting the service."""
+    info = reload_config()
+    return {"message": "Configuration reloaded", **info}
+
 
 @app.get("/metrics")
 async def metrics():

@@ -1,5 +1,5 @@
 import os
-from app.core.config import MODEL_NAME, TASK_MODEL_MAP, MODEL_MAP
+from app.services.config_watcher import get_config_watcher
 from app.services.throttling import get_token_count
 
 # Read token threshold (default: 500 tokens). Falls back to converting SMARTHUB_MODEL_THRESHOLD if provided.
@@ -15,15 +15,13 @@ else:
 
 
 def select_model(task_type: str, text: str = "") -> str:
-    if task_type in TASK_MODEL_MAP:
-        base = TASK_MODEL_MAP[task_type]
-    else:
-        base = MODEL_NAME
+    watcher = get_config_watcher()
+    base = watcher.get_task_model(task_type) or watcher.get_default_model()
 
     if task_type in ("chat", "agent"):
         token_count = get_token_count(text, base)
         if token_count > _TOKEN_THRESHOLD:
-            reasoner = MODEL_MAP.get("smart-hub-reasoner")
+            reasoner = watcher.get_model("smart-hub-reasoner")
             if reasoner:
                 return reasoner
 
