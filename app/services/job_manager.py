@@ -1,8 +1,8 @@
 import json
-import uuid
 import os
 import threading
 import time
+import uuid
 from typing import Any
 
 _redis = None
@@ -34,6 +34,7 @@ def _get_redis():
         _redis_last_attempt = now
         try:
             import redis as redis_module
+
             _redis = redis_module.Redis(
                 host=os.getenv("REDIS_HOST", "localhost"),
                 port=int(os.getenv("REDIS_PORT", "6379")),
@@ -45,6 +46,7 @@ def _get_redis():
         except Exception:
             _redis = None
     return _redis
+
 
 def _redis_set(key: str, value: str, ex: int = 3600) -> bool:
     r = _get_redis()
@@ -97,11 +99,13 @@ def create_job() -> str:
             _memory_store[f"job:{job_id}"] = data
     return job_id
 
+
 def update_job(job_id: str, status: str, result: Any = None):
     data = json.dumps({"status": status, "result": result})
     if not _redis_set(f"job:{job_id}", data):
         with _memory_lock:
             _memory_store[f"job:{job_id}"] = data
+
 
 def get_job(job_id: str) -> dict | None:
     data = _redis_get(f"job:{job_id}")
@@ -109,6 +113,7 @@ def get_job(job_id: str) -> dict | None:
         with _memory_lock:
             data = _memory_store.get(f"job:{job_id}")
     return json.loads(data) if data else None
+
 
 def add_message_to_history(session_id: str, role: str, content: str):
     key = f"history:{session_id}"
@@ -118,6 +123,7 @@ def add_message_to_history(session_id: str, role: str, content: str):
             history = json.loads(_memory_store.get(key, "[]"))
             history.insert(0, json.loads(message))
             _memory_store[key] = json.dumps(history[:10])
+
 
 def get_history(session_id: str) -> list:
     data = _redis_lrange(key := f"history:{session_id}")

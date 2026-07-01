@@ -1,5 +1,7 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from app.services.model_selector import select_model
 
 
@@ -47,6 +49,7 @@ class TestSelectModel:
     def test_no_reasoner_in_map_falls_back(self, mock_watcher):
         def get_model_side_effect(name):
             return None  # No reasoner for any model name
+
         mock_watcher.get_model.side_effect = get_model_side_effect
         model = select_model("chat", text="long text here")
         assert model == "huggingface/meta-llama/Meta-Llama-3-8B-Instruct"

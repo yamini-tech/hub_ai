@@ -10,15 +10,15 @@ Usage:
 """
 
 import argparse
-import json
-import os
-import sys
 import asyncio
-import httpx
+import json
+import sys
 from pathlib import Path
 
+import httpx
+
 from evals.judge import judge_response
-from evals.reporter import aggregate_results, print_summary, print_case_result
+from evals.reporter import aggregate_results, print_summary
 
 EVALS_DIR = Path(__file__).parent
 DATASETS_DIR = EVALS_DIR / "datasets"
@@ -55,14 +55,16 @@ def _deep_get(obj, dotted_key: str):
     return current
 
 
-async def run_objective_checks(response_text: str, expected: dict, response_json: dict | None = None) -> tuple[bool, list[str]]:
+async def run_objective_checks(
+    response_text: str,
+    expected: dict,
+    response_json: dict | None = None,
+) -> tuple[bool, list[str]]:
     failures = []
 
     if expected.get("min_length_chars"):
         if len(response_text) < expected["min_length_chars"]:
-            failures.append(
-                f"too short ({len(response_text)} < {expected['min_length_chars']} chars)"
-            )
+            failures.append(f"too short ({len(response_text)} < {expected['min_length_chars']} chars)")
 
     for term in expected.get("must_contain", []):
         if term.lower() not in response_text.lower():
@@ -162,7 +164,7 @@ async def run_case(
             "response": json.dumps(data)[:500],
         }
 
-    response_json = data.get(response_key) if isinstance(data.get(response_key), (dict, list)) else None
+    response_json = data.get(response_key) if isinstance(data.get(response_key), dict | list) else None
     response_str = str(response_text) if not isinstance(response_text, str) else response_text
 
     passed, failures = await run_objective_checks(response_str, expected, response_json)
@@ -205,7 +207,7 @@ async def main_async(args: argparse.Namespace) -> int:
     if args.judge_model:
         print(f"Judge:  {args.judge_model}")
     else:
-        print(f"Judge:  disabled (objective checks only)")
+        print("Judge:  disabled (objective checks only)")
     print(f"{'=' * 58}")
 
     case_results = []
@@ -240,9 +242,13 @@ async def main_async(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="SmartHub AI Brain Eval Harness")
     parser.add_argument("--base", default=DEFAULT_BASE, help="Base URL of the hub_ai service")
-    parser.add_argument("--tasks", type=lambda s: [t.strip() for t in s.split(",")], help="Comma-separated task types to eval")
+    parser.add_argument(
+        "--tasks", type=lambda s: [t.strip() for t in s.split(",")], help="Comma-separated task types to eval"
+    )
     parser.add_argument("--judge-model", default=None, help="Model to use as LLM judge (e.g. openai/gpt-4o)")
-    parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD, help="Minimum average judge score (default: no threshold)")
+    parser.add_argument(
+        "--threshold", type=float, default=DEFAULT_THRESHOLD, help="Minimum average judge score (default: no threshold)"
+    )
     args = parser.parse_args()
 
     return asyncio.run(main_async(args))

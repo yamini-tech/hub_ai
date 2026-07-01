@@ -1,21 +1,22 @@
 import json
-from typing import Any, Optional
+from typing import Any
 
 try:
     import jsonschema as _jsonschema
+
     HAS_JSONSCHEMA = True
 except ImportError:
     _jsonschema = None
     HAS_JSONSCHEMA = False
 
 
-def validate_json_output(content: str, schema: Optional[dict] = None) -> tuple[bool, str, Any]:
+def validate_json_output(content: str, schema: dict | None = None) -> tuple[bool, str, Any]:
     """Validate LLM output as valid JSON and optionally against a JSON Schema.
-    
+
     Args:
         content: Raw string output from the LLM.
         schema: Optional JSON Schema dict to validate against.
-        
+
     Returns:
         (is_valid, error_message, parsed_data)
         - is_valid: True if JSON is valid and schema passes (if provided)
@@ -29,7 +30,7 @@ def validate_json_output(content: str, schema: Optional[dict] = None) -> tuple[b
         lines = content.split("\n")
         for i, line in enumerate(lines):
             if line.startswith("```"):
-                content = "\n".join(lines[i+1:]).strip()
+                content = "\n".join(lines[i + 1 :]).strip()
                 if content.endswith("```"):
                     content = content[:-3].strip()
                 break

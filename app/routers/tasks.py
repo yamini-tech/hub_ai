@@ -1,14 +1,14 @@
-import asyncio
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from app.schemas import SummarizeRequest, ParseRequest
-from app.utils import _stream_sse
+
+from app.core.config import MAX_TOKENS_TASK, RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_SEC
+from app.schemas import ParseRequest, SummarizeRequest
+from app.services.json_validator import validate_json_output
 from app.services.llm_client import call_llm, call_llm_stream
-from app.services.throttling import is_request_allowed, check_rate_limit_by_user
 from app.services.model_selector import select_model
 from app.services.prompt_manager import get_system_prompt
-from app.services.json_validator import validate_json_output
-from app.core.config import RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX_REQUESTS, MAX_TOKENS_TASK
+from app.services.throttling import check_rate_limit_by_user, is_request_allowed
+from app.utils import _stream_sse
 
 router = APIRouter()
 
@@ -21,10 +21,16 @@ def _build_parse_messages(text: str, schema_hint: str | None = None, json_schema
     schema_instruction = ""
     if json_schema:
         import json as _json
+
         schema_instruction = f"\nThe response MUST conform to this JSON Schema:\n{_json.dumps(json_schema, indent=2)}"
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Parse the following unstructured text into structured data:{hint}{schema_instruction}\n\n{text}"},
+        {
+            "role": "user",
+            "content": (
+                f"Parse the following unstructured text into structured data:" f"{hint}{schema_instruction}\n\n{text}"
+            ),
+        },
     ]
     return messages
 
@@ -40,7 +46,11 @@ async def summarize(request: SummarizeRequest):
     allowed, count = is_request_allowed(request.text, max_tokens=MAX_TOKENS_TASK)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
-    rate_ok, req_count = check_rate_limit_by_user(request.session_id, window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(
+        request.session_id,
+        window_sec=RATE_LIMIT_WINDOW_SEC,
+        max_requests=RATE_LIMIT_MAX_REQUESTS,
+    )
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -58,12 +68,17 @@ async def summarize(request: SummarizeRequest):
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
+
 @router.post("/summarize/sync")
 async def summarize_sync(request: SummarizeRequest):
     allowed, count = is_request_allowed(request.text, max_tokens=MAX_TOKENS_TASK)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
-    rate_ok, req_count = check_rate_limit_by_user(request.session_id, window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(
+        request.session_id,
+        window_sec=RATE_LIMIT_WINDOW_SEC,
+        max_requests=RATE_LIMIT_MAX_REQUESTS,
+    )
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -76,12 +91,17 @@ async def summarize_sync(request: SummarizeRequest):
     res = await call_llm(messages, model=model)
     return {"summary": res.content}
 
+
 @router.post("/parse")
 async def parse_unstructured(request: ParseRequest):
     allowed, count = is_request_allowed(request.text, max_tokens=MAX_TOKENS_TASK)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
-    rate_ok, req_count = check_rate_limit_by_user(request.session_id, window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(
+        request.session_id,
+        window_sec=RATE_LIMIT_WINDOW_SEC,
+        max_requests=RATE_LIMIT_MAX_REQUESTS,
+    )
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -96,12 +116,17 @@ async def parse_unstructured(request: ParseRequest):
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
+
 @router.post("/parse/sync")
 async def parse_unstructured_sync(request: ParseRequest):
     allowed, count = is_request_allowed(request.text, max_tokens=MAX_TOKENS_TASK)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
-    rate_ok, req_count = check_rate_limit_by_user(request.session_id, window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(
+        request.session_id,
+        window_sec=RATE_LIMIT_WINDOW_SEC,
+        max_requests=RATE_LIMIT_MAX_REQUESTS,
+    )
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -121,10 +146,14 @@ async def parse_unstructured_sync(request: ParseRequest):
 
         if attempt < RETRY_PARSE_MAX - 1:
             messages.append({"role": "assistant", "content": content})
-            messages.append({
-                "role": "user",
-                "content": f"The previous output was not valid JSON. Error: {error}. Please return ONLY valid JSON."
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"The previous output was not valid JSON. Error: {error}. " "Please return ONLY valid JSON."
+                    ),
+                }
+            )
 
     raise HTTPException(
         status_code=422,

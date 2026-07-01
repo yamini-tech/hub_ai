@@ -1,8 +1,18 @@
 import time
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 import app.services.throttling as throttling_mod
-from app.services.throttling import get_token_count, is_request_allowed, check_rate_limit, check_rate_limit_by_key, check_rate_limit_by_user, resolve_user_key, _rate_windows
+from app.services.throttling import (
+    _rate_windows,
+    check_rate_limit,
+    check_rate_limit_by_key,
+    check_rate_limit_by_user,
+    get_token_count,
+    is_request_allowed,
+    resolve_user_key,
+)
 from app.services.usage_tracker import set_api_key
 
 
@@ -126,6 +136,7 @@ class TestCheckRateLimit:
 class TestResolveUserKey:
     def setup_method(self):
         from app.services.usage_tracker import api_key_var
+
         api_key_var.set(None)
 
     def test_without_api_key_returns_session_prefix(self):
@@ -140,6 +151,7 @@ class TestCheckRateLimitByUser:
     def setup_method(self):
         _rate_windows.clear()
         from app.services.usage_tracker import api_key_var
+
         api_key_var.set(None)
 
     def test_without_api_key_per_session(self):

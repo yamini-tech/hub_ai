@@ -1,10 +1,10 @@
-import time
 from unittest.mock import MagicMock
 
 
 class TestLlmCache:
     def test_cache_hit_returns_stored(self):
-        from app.services.cache import get_cache, set_cache, clear_cache
+        from app.services.cache import clear_cache, get_cache, set_cache
+
         clear_cache()
         msg = MagicMock()
         msg.content = "cached result"
@@ -14,13 +14,15 @@ class TestLlmCache:
         assert cached is msg
 
     def test_cache_miss_returns_none(self):
-        from app.services.cache import get_cache, clear_cache
+        from app.services.cache import clear_cache, get_cache
+
         clear_cache()
         result = get_cache([{"role": "user", "content": "no-cache"}], "any-model")
         assert result is None
 
     def test_cache_key_differentiates_models(self):
-        from app.services.cache import get_cache, set_cache, clear_cache
+        from app.services.cache import clear_cache, get_cache, set_cache
+
         clear_cache()
         msg = MagicMock()
         msg.content = "model-a result"
@@ -30,7 +32,8 @@ class TestLlmCache:
         assert cached_b is None
 
     def test_cache_ttl_expires(self, monkeypatch):
-        from app.services.cache import get_cache, set_cache, clear_cache
+        from app.services.cache import clear_cache, get_cache, set_cache
+
         clear_cache()
         msg = MagicMock()
         msg.content = "stale"
@@ -41,7 +44,8 @@ class TestLlmCache:
         assert cached is None
 
     def test_cache_stats(self):
-        from app.services.cache import get_cache, set_cache, clear_cache, get_cache_stats
+        from app.services.cache import clear_cache, get_cache, get_cache_stats, set_cache
+
         clear_cache()
         stats = get_cache_stats()
         assert stats["hits"] == 0

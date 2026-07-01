@@ -1,24 +1,27 @@
-import os
 import asyncio
-from fastapi import FastAPI, Depends, Request
+import os
+
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
+
+from app.core.config import API_KEY_ENABLED, poll_config, reload_config
+from app.core.security import verify_api_key
+from app.middleware.logging import ai_usage_middleware
 from app.routers.chat import router as chat_router
-from app.routers.tasks import router as tasks_router
 from app.routers.gateway import router as gateway_router
 from app.routers.hub_compat import router as hub_compat_router
-from app.middleware.logging import ai_usage_middleware
-from app.core.security import verify_api_key
-from app.core.config import API_KEY_ENABLED, reload_config, poll_config
-from app.services.prompt_manager import load_prompts, _PROMPTS
+from app.routers.tasks import router as tasks_router
+from app.services.prompt_manager import _PROMPTS, load_prompts
 
 MAX_REQUEST_SIZE = int(os.getenv("SMARTHUB_MAX_REQUEST_SIZE", str(10 * 1024 * 1024)))
 CORS_ORIGINS = os.getenv("SMARTHUB_CORS_ORIGINS", "")
 
 app = FastAPI(
     title="SmartHub AI",
-    description="Unified AI microservice for SmartHub — summarization, parsing, chat, and agent capabilities with streaming.",
+    description="Unified AI microservice for SmartHub — summarization, parsing, "
+    "chat, and agent capabilities with streaming.",
     version="2.0.0",
 )
 
@@ -44,6 +47,7 @@ async def request_size_middleware(request: Request, call_next):
         )
     return await call_next(request)
 
+
 deps = [Depends(verify_api_key)] if API_KEY_ENABLED else []
 
 app.include_router(chat_router, prefix="/api", tags=["Agent"], dependencies=deps)
@@ -56,6 +60,7 @@ app.include_router(gateway_router, prefix="/api", tags=["Gateway"])
 
 # SmartHub Backend Compatibility — endpoints hub_backend expects
 app.include_router(hub_compat_router, tags=["Hub Compat"])
+
 
 @app.get("/")
 async def root():
@@ -77,6 +82,7 @@ async def root():
             "process": "/api/ai/process — async background processing",
         },
     }
+
 
 @app.get("/health")
 async def health():
@@ -106,6 +112,7 @@ async def _config_poll_loop():
     """Background task that polls config.yaml for changes every
     POLL_INTERVAL_SEC seconds and hot-reloads model routing."""
     from app.services.config_watcher import POLL_INTERVAL_SEC
+
     while True:
         await asyncio.sleep(POLL_INTERVAL_SEC)
         try:
@@ -117,8 +124,10 @@ async def _config_poll_loop():
 @app.on_event("shutdown")
 async def shutdown_event():
     from app.services.vector_store import _cleanup
+
     _cleanup()
     print("--- SmartHub Intelligence Brain shut down gracefully ---")
+
 
 @app.post("/admin/config/reload", dependencies=deps)
 async def admin_reload_config():
@@ -129,14 +138,16 @@ async def admin_reload_config():
 
 @app.get("/metrics")
 async def metrics():
-    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
     from fastapi.responses import Response
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     from fastapi.responses import JSONResponse
+
     return JSONResponse(
         status_code=500,
         content={"message": "An unexpected error occurred in the AI Brain", "details": str(exc)},

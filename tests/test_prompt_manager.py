@@ -1,8 +1,10 @@
 import os
 import tempfile
-import yaml
+
 import pytest
-from app.services.prompt_manager import _PROMPTS, load_prompts, get_system_prompt
+import yaml
+
+from app.services.prompt_manager import _PROMPTS, get_system_prompt, load_prompts
 
 
 @pytest.fixture(autouse=True)
@@ -20,9 +22,7 @@ class TestLoadPrompts:
                 "test_task": "Test task prompt",
             }
         }
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(data, f)
             path = f.name
 
@@ -38,9 +38,7 @@ class TestLoadPrompts:
         assert _PROMPTS == {}
 
     def test_load_invalid_yaml(self):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("invalid: yaml: : : :")
             path = f.name
 
@@ -52,9 +50,7 @@ class TestLoadPrompts:
 
     def test_load_no_system_prompts_key(self):
         data = {"other_key": {"something": "value"}}
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(data, f)
             path = f.name
 

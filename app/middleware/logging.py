@@ -1,23 +1,23 @@
 import logging
 import time
 import uuid
+
 from fastapi import Request
-from app.services.pricing import calculate_cost
-from app.services.usage_tracker import set_request_id, pop_usage, set_api_key
-from app.services.pii_redactor import redact_pii
+
 from app.services.metrics import (
-    http_requests_total,
     http_request_duration_seconds,
+    http_requests_total,
     llm_requests_total,
     llm_tokens_total,
 )
+from app.services.pii_redactor import redact_pii
+from app.services.pricing import calculate_cost
+from app.services.usage_tracker import pop_usage, set_api_key, set_request_id
 
 logger = logging.getLogger("smartbrain")
 logger.setLevel(logging.INFO)
 _handler = logging.StreamHandler()
-_handler.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(message)s"
-))
+_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 logger.addHandler(_handler)
 
 
@@ -75,6 +75,9 @@ async def ai_usage_middleware(request: Request, call_next):
         http_request_duration_seconds.labels(method=request.method, path=request.url.path).observe(latency_ms / 1000)
         logger.error(
             "request_id=%s method=%s path=%s status=500 latency_ms=%.1f",
-            request_id, request.method, request.url.path, latency_ms,
+            request_id,
+            request.method,
+            request.url.path,
+            latency_ms,
         )
         raise

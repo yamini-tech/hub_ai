@@ -1,8 +1,13 @@
 import pytest
 from pydantic import ValidationError
+
 from app.schemas import (
-    AIRequest, SummarizeRequest, ParseRequest,
-    SentimentResponse, TaskType, GatewayRequest,
+    AIRequest,
+    GatewayRequest,
+    ParseRequest,
+    SentimentResponse,
+    SummarizeRequest,
+    TaskType,
 )
 
 
@@ -65,45 +70,34 @@ class TestParseRequest:
 
 class TestSentimentResponse:
     def test_valid_positive(self):
-        resp = SentimentResponse(
-            sentiment="positive", confidence=0.95, key_phrases=["good", "great"]
-        )
+        resp = SentimentResponse(sentiment="positive", confidence=0.95, key_phrases=["good", "great"])
         assert resp.sentiment == "positive"
 
     def test_valid_negative(self):
-        resp = SentimentResponse(
-            sentiment="negative", confidence=0.8, key_phrases=["bad"]
-        )
+        resp = SentimentResponse(sentiment="negative", confidence=0.8, key_phrases=["bad"])
         assert resp.sentiment == "negative"
 
     def test_valid_neutral(self):
-        resp = SentimentResponse(
-            sentiment="neutral", confidence=0.5, key_phrases=["ok"]
-        )
+        resp = SentimentResponse(sentiment="neutral", confidence=0.5, key_phrases=["ok"])
         assert resp.sentiment == "neutral"
 
     def test_invalid_sentiment_fails(self):
         with pytest.raises(ValidationError):
-            SentimentResponse(
-                sentiment="unknown", confidence=0.5, key_phrases=["ok"]
-            )
+            SentimentResponse(sentiment="unknown", confidence=0.5, key_phrases=["ok"])
 
     def test_confidence_too_low_fails(self):
         with pytest.raises(ValidationError):
-            SentimentResponse(
-                sentiment="positive", confidence=-0.1, key_phrases=["ok"]
-            )
+            SentimentResponse(sentiment="positive", confidence=-0.1, key_phrases=["ok"])
 
     def test_confidence_too_high_fails(self):
         with pytest.raises(ValidationError):
-            SentimentResponse(
-                sentiment="positive", confidence=1.5, key_phrases=["ok"]
-            )
+            SentimentResponse(sentiment="positive", confidence=1.5, key_phrases=["ok"])
 
     def test_too_many_key_phrases_fails(self):
         with pytest.raises(ValidationError):
             SentimentResponse(
-                sentiment="positive", confidence=0.5,
+                sentiment="positive",
+                confidence=0.5,
                 key_phrases=["a"] * 21,
             )
 
@@ -122,15 +116,15 @@ class TestGatewayRequest:
         assert req.stream is True
 
     def test_valid_stream_false(self):
-        req = GatewayRequest(
-            task_type=TaskType.PARSE, text="Parse this", stream=False
-        )
+        req = GatewayRequest(task_type=TaskType.PARSE, text="Parse this", stream=False)
         assert req.stream is False
 
     def test_with_schema_hint(self):
         req = GatewayRequest(
-            task_type=TaskType.PARSE, text="Parse this",
-            schema_hint="JSON", stream=False,
+            task_type=TaskType.PARSE,
+            text="Parse this",
+            schema_hint="JSON",
+            stream=False,
         )
         assert req.schema_hint == "JSON"
 
@@ -143,9 +137,7 @@ class TestGatewayRequest:
             GatewayRequest(task_type=TaskType.SUMMARIZE, text="x" * 50001)
 
     def test_custom_session_id(self):
-        req = GatewayRequest(
-            task_type=TaskType.AGENT, text="Hi", session_id="my_session"
-        )
+        req = GatewayRequest(task_type=TaskType.AGENT, text="Hi", session_id="my_session")
         assert req.session_id == "my_session"
 
     def test_all_task_types(self):

@@ -1,29 +1,41 @@
 import asyncio
 import json
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+
+from app.core.config import (
+    API_KEY_ENABLED,
+    MAX_TOKENS_GATEWAY,
+    RATE_LIMIT_MAX_REQUESTS,
+    RATE_LIMIT_WINDOW_SEC,
+)
+from app.core.security import verify_api_key
 from app.schemas import GatewayRequest, TaskType
+from app.services.job_manager import create_job
+from app.services.json_validator import validate_json_output
 from app.services.llm_client import call_llm, call_llm_stream, tools
 from app.services.memory_manager import read_knowledge_base
-from app.services.search_service import web_search
-from app.services.throttling import is_request_allowed, check_rate_limit_by_user
-from app.services.job_manager import create_job
-from app.services.task_processor import run_llm_task
 from app.services.model_selector import select_model
 from app.services.prompt_manager import get_system_prompt
-from app.services.json_validator import validate_json_output
-from app.core.security import verify_api_key
-from app.core.config import API_KEY_ENABLED, MODEL_NAME, API_BASE, MAX_TOKENS_GATEWAY, RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX_REQUESTS
+from app.services.search_service import web_search
+from app.services.task_processor import run_llm_task
+from app.services.throttling import check_rate_limit_by_user, is_request_allowed
 
 router = APIRouter()
 deps = [Depends(verify_api_key)] if API_KEY_ENABLED else []
+
 
 @router.post("/ai/gateway", dependencies=deps)
 async def ai_gateway(request: GatewayRequest, background_tasks: BackgroundTasks):
     allowed, count = is_request_allowed(request.text, max_tokens=MAX_TOKENS_GATEWAY)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count}")
-    rate_ok, req_count = check_rate_limit_by_user(request.session_id, window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(
+        request.session_id,
+        window_sec=RATE_LIMIT_WINDOW_SEC,
+        max_requests=RATE_LIMIT_MAX_REQUESTS,
+    )
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -40,7 +52,7 @@ async def ai_gateway(request: GatewayRequest, background_tasks: BackgroundTasks)
 
 
 async def _handle_summarize(request: GatewayRequest):
-    model = select_model("summarize", request.text)
+    model = request.model or select_model("summarize", request.text)
     system_prompt = get_system_prompt("summarize")
     messages = [
         {"role": "system", "content": system_prompt},
@@ -55,19 +67,35 @@ async def _handle_summarize(request: GatewayRequest):
             content += c
     return {"summary": content}
 
+
 async def _handle_parse(request: GatewayRequest):
-    model = select_model("parse", request.text)
+    model = request.model or select_model("parse", request.text)
     system_prompt = get_system_prompt("parse")
     hint = f"\nDesired structure hint: {request.schema_hint}" if request.schema_hint else ""
     schema_instruction = ""
     if request.json_schema:
-        schema_instruction = f"\nThe response MUST conform to this JSON Schema:\n{json.dumps(request.json_schema, indent=2)}"
+        schema_instruction = (
+            f"\nThe response MUST conform to this JSON Schema:\n" f"{json.dumps(request.json_schema, indent=2)}"
+        )
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Parse the following unstructured text into structured data:{hint}{schema_instruction}\n\n{request.text}"},
+        {
+            "role": "user",
+            "content": (
+                f"Parse the following unstructured text into structured data:"
+                f"{hint}{schema_instruction}\n\n{request.text}"
+            ),
+        },
     ]
     if request.json_schema:
-        response_format = {"type": "json_schema", "json_schema": {"name": "parsed_output", "schema": request.json_schema, "strict": True}}
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "parsed_output",
+                "schema": request.json_schema,
+                "strict": True,
+            },
+        }
     else:
         response_format = {"type": "json_object"}
 
@@ -86,8 +114,9 @@ async def _handle_parse(request: GatewayRequest):
         raise HTTPException(status_code=422, detail=f"Parse output validation failed: {error}")
     return {"parsed": parsed}
 
+
 async def _handle_agent(request: GatewayRequest):
-    model = select_model("agent", request.text)
+    model = request.model or select_model("agent", request.text)
     context = await asyncio.to_thread(read_knowledge_base, request.text)
     system_prompt = get_system_prompt("agent", context=context)
     messages = [
@@ -102,11 +131,10 @@ async def _handle_agent(request: GatewayRequest):
     response = await call_llm(messages, model=model, tools_list=tools)
     return {"answer": response.content}
 
+
 async def _handle_process(request: GatewayRequest, background_tasks: BackgroundTasks):
     job_id = create_job()
-    background_tasks.add_task(
-        run_llm_task, job_id, request.task_type.value, request.text, request.session_id
-    )
+    background_tasks.add_task(run_llm_task, job_id, request.task_type.value, request.text, request.session_id)
     return {"job_id": job_id, "status": "processing"}
 
 
@@ -120,6 +148,7 @@ async def _stream(messages: list, model: str = "", response_format=None):
     except TimeoutError:
         yield 'data: {"error": "stream_timeout"}\n\n'
     yield "data: [DONE]\n\n"
+
 
 async def _agent_stream(messages: list, original_text: str, model: str):
     stream = await call_llm_stream(messages, tools_list=tools, model=model)

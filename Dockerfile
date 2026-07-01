@@ -23,6 +23,8 @@ ENV PYTHONUNBUFFERED=1 SMARTHUB_ALLOWED_EXTRACT_DIR=/app
 
 EXPOSE 8003
 
+RUN chown -R app:app /app
+
 USER app
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]

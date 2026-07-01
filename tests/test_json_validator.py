@@ -1,4 +1,3 @@
-import pytest
 from app.services.json_validator import validate_json_output
 
 
@@ -11,7 +10,7 @@ class TestValidateJsonOutput:
         assert data == {"name": "John", "age": 30}
 
     def test_valid_json_array(self):
-        content = '[1, 2, 3]'
+        content = "[1, 2, 3]"
         valid, error, data = validate_json_output(content)
         assert valid is True
         assert data == [1, 2, 3]
@@ -138,7 +137,7 @@ class TestValidateJsonOutput:
         assert data == "just a string"
 
     def test_number_json(self):
-        content = '42'
+        content = "42"
         valid, error, data = validate_json_output(content)
         assert valid is True
         assert data == 42

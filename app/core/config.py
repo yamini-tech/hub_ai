@@ -1,6 +1,8 @@
 import os
+
 import yaml
-from app.services.config_watcher import get_config_watcher, ConfigWatcher
+
+from app.services.config_watcher import ConfigWatcher, get_config_watcher
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
@@ -54,6 +56,7 @@ if TEST_MODEL:
 
 # ── Hot-reload support ───────────────────────────────────────────────
 
+
 def reload_config() -> dict:
     """Force a reload of config.yaml and return status info.
 
@@ -89,7 +92,8 @@ def _sync_globals(watcher: ConfigWatcher) -> None:
         "reasoning": watcher.get_model("smart-hub-reasoner") or MODEL_NAME,
         "parse": watcher.get_model("smart-hub-parser") or MODEL_NAME,
     }
-    
+
+
 # Security
 API_KEY = os.getenv("SMARTHUB_API_KEY", "")
 API_KEY_ENABLED = bool(API_KEY)

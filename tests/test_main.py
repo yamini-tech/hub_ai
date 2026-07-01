@@ -1,9 +1,7 @@
-from app.main import app
-
-
 class TestGracefulShutdown:
     def test_shutdown_handler_registered(self):
         from app.main import app as _app
+
         assert len(_app.router.on_shutdown) == 1
 
 
@@ -68,6 +66,7 @@ class TestRequestBodySizeLimit:
 class TestGlobalExceptionHandler:
     def test_global_handler_registered(self, client):
         from app.main import app as _app
+
         handlers = _app.exception_handlers
         assert Exception in handlers
         assert callable(handlers[Exception])

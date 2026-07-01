@@ -15,7 +15,8 @@ def _get_model():
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer('all-MiniLM-L6-v2')
+
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
     return _model
 
 
@@ -23,7 +24,12 @@ def _get_client():
     global _chroma_client
     if _chroma_client is None:
         import chromadb
-        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "chroma_db"))
+
+        db_path = os.getenv(
+            "SMARTHUB_CHROMA_DIR",
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "chroma_db")),
+        )
+        os.makedirs(db_path, exist_ok=True)
         _chroma_client = chromadb.PersistentClient(path=db_path)
     return _chroma_client
 
@@ -40,29 +46,30 @@ def add_to_memory(text: str):
     col = _get_collection()
     col.add(documents=[text], ids=[doc_id])
 
+
 def query_memory(query: str, n_results: int = 3, min_score: float = 0.7) -> str:
     col = _get_collection()
     results = col.query(query_texts=[query], n_results=n_results)
-    if results['documents'] and results['documents'][0]:
-        distances = results.get('distances')
+    if results["documents"] and results["documents"][0]:
+        distances = results.get("distances")
         if distances and distances[0]:
-            relevant = [
-                doc for doc, dist in zip(results['documents'][0], distances[0])
-                if dist <= min_score
-            ]
+            relevant = [doc for doc, dist in zip(results["documents"][0], distances[0]) if dist <= min_score]
             if relevant:
                 return "\n".join(relevant)
             return "No relevant context found."
-        return "\n".join(results['documents'][0])
+        return "\n".join(results["documents"][0])
     return "No relevant context found."
+
 
 def get_all_documents() -> list[str]:
     col = _get_collection()
     results = col.get()
-    return results['documents'] if results and results['documents'] else []
+    return results["documents"] if results and results["documents"] else []
+
 
 def get_embedding(text: str) -> list[float]:
     return _get_model().encode(text).tolist()
+
 
 def ingest_chunks(
     chunks: list[str],
@@ -72,12 +79,10 @@ def ingest_chunks(
 ) -> int:
     col = _get_collection(collection_name)
     ids = [f"{document_id}__{i}" for i in range(len(chunks))]
-    metadatas = [
-        {"user_id": user_id, "document_id": document_id, "chunk_index": i}
-        for i in range(len(chunks))
-    ]
+    metadatas = [{"user_id": user_id, "document_id": document_id, "chunk_index": i} for i in range(len(chunks))]
     col.add(documents=chunks, ids=ids, metadatas=metadatas)
     return len(chunks)
+
 
 def retrieve_chunks(
     query: str,
@@ -91,9 +96,10 @@ def retrieve_chunks(
         n_results=top_k,
         where={"user_id": user_id},
     )
-    if results['documents'] and results['documents'][0]:
-        return results['documents'][0]
+    if results["documents"] and results["documents"][0]:
+        return results["documents"][0]
     return []
+
 
 def delete_document_chunks(
     document_id: str,
@@ -108,6 +114,7 @@ def delete_document_chunks(
     if ids:
         col.delete(ids=ids)
     return len(ids)
+
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
     if chunk_size <= 0:

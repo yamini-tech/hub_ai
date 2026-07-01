@@ -1,6 +1,8 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from app.services.content_filter import check_content, filter_stream, _BLOCKED_RESPONSE
+
+from app.services.content_filter import _BLOCKED_RESPONSE, check_content, filter_stream
 
 
 class TestContentFilter:

@@ -1,13 +1,12 @@
 import os
-import time
-import yaml
 import threading
-from typing import Optional
 
+import yaml
 
 CONFIG_PATH = os.path.join(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),
-    "config", "config.yaml",
+    "config",
+    "config.yaml",
 )
 
 POLL_INTERVAL_SEC = 30
@@ -92,7 +91,7 @@ class ConfigWatcher:
         with self._lock:
             self._load()
 
-    def get_model(self, name: str) -> Optional[str]:
+    def get_model(self, name: str) -> str | None:
         with self._lock:
             return self._model_map.get(name)
 
@@ -103,7 +102,7 @@ class ConfigWatcher:
                     return fallbacks
             return []
 
-    def get_task_model(self, task_type: str) -> Optional[str]:
+    def get_task_model(self, task_type: str) -> str | None:
         with self._lock:
             return self._task_model_map.get(task_type)
 
@@ -120,7 +119,7 @@ class ConfigWatcher:
 
 
 # Module-level singleton
-_watcher: Optional[ConfigWatcher] = None
+_watcher: ConfigWatcher | None = None
 _watcher_lock = threading.Lock()
 
 

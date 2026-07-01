@@ -1,10 +1,14 @@
 import json
 import uuid
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from app.services.job_manager import (
-    create_job, update_job, get_job,
-    add_message_to_history, get_history, _memory_store,
+    _memory_store,
+    add_message_to_history,
+    create_job,
+    get_history,
+    get_job,
+    update_job,
 )
 
 

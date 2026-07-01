@@ -1,11 +1,12 @@
 import os
-import time
 import tempfile
-import yaml
-import pytest
+import time
 from unittest.mock import patch
-from app.services.config_watcher import ConfigWatcher
 
+import pytest
+import yaml
+
+from app.services.config_watcher import ConfigWatcher
 
 SAMPLE_CONFIG = {
     "model_list": [
@@ -84,9 +85,14 @@ class TestConfigWatcher:
         # Wait to ensure mtime changes
         time.sleep(0.01)
         with open(config_file, "w") as f:
-            yaml.dump({"model_list": [
-                {"model_name": "smart-hub-summarizer", "litellm_params": {"model": "ollama/llama3.2"}},
-            ]}, f)
+            yaml.dump(
+                {
+                    "model_list": [
+                        {"model_name": "smart-hub-summarizer", "litellm_params": {"model": "ollama/llama3.2"}},
+                    ]
+                },
+                f,
+            )
 
         reloaded = watcher.reload()
         assert reloaded is True
@@ -102,9 +108,14 @@ class TestConfigWatcher:
         assert watcher.get_model("smart-hub-summarizer") == "openai/gpt-4o"
 
         with open(config_file, "w") as f:
-            yaml.dump({"model_list": [
-                {"model_name": "smart-hub-summarizer", "litellm_params": {"model": "claude-3-5-sonnet"}},
-            ]}, f)
+            yaml.dump(
+                {
+                    "model_list": [
+                        {"model_name": "smart-hub-summarizer", "litellm_params": {"model": "claude-3-5-sonnet"}},
+                    ]
+                },
+                f,
+            )
 
         watcher.reload_force()
         assert watcher.get_model("smart-hub-summarizer") == "claude-3-5-sonnet"

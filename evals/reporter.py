@@ -36,11 +36,7 @@ def aggregate_results(
             "avg_judge_score": avg,
         }
 
-    all_scores = [
-        c["judge_score"]
-        for c in case_results
-        if c.get("judge_score") is not None
-    ]
+    all_scores = [c["judge_score"] for c in case_results if c.get("judge_score") is not None]
     overall_avg = round(sum(all_scores) / len(all_scores), 2) if all_scores else None
 
     report = {
@@ -78,11 +74,14 @@ def print_summary(report: dict[str, Any]) -> None:
     print(f"\n{sep}")
     print(f"  Eval Results — {report['run_id']}")
     print(f"{sep}")
-    print(f"  Total:  {s['total']:3d}   Passed: {s['passed']:3d}   Failed: {s['failed']:3d}   Rate: {s['pass_rate_pct']}%")
+    print(
+        f"  Total:  {s['total']:3d}   Passed: {s['passed']:3d}   "
+        f"Failed: {s['failed']:3d}   Rate: {s['pass_rate_pct']}%"
+    )
     if s["avg_judge_score"] is not None:
         print(f"  Avg Judge Score: {s['avg_judge_score']:.2f} / 5.00")
     print(f"{sep}")
-    print(f"  By Task:")
+    print("  By Task:")
     for task_name, ts in sorted(s["by_task"].items()):
         score_str = f"  Judge: {ts['avg_judge_score']:.2f}" if ts["avg_judge_score"] is not None else ""
         print(f"    {task_name:12s}  {ts['passed']:2d}/{ts['total']:2d} passed  {score_str}")

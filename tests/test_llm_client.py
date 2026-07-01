@@ -1,6 +1,7 @@
-import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import litellm
-from unittest.mock import patch, MagicMock, AsyncMock
+import pytest
 from fastapi import HTTPException
 
 
@@ -31,7 +32,9 @@ class TestCallLlm:
         mock_litellm.acompletion.assert_called_with(
             model="custom-model",
             messages=[{"role": "user", "content": "Hi"}],
-            tools=None, response_format=None,
+            tools=None,
+            response_format=None,
+            timeout=30,
         )
 
     @patch("app.services.llm_client.litellm")
@@ -67,7 +70,10 @@ class TestCallLlmStream:
         mock_litellm.acompletion.assert_called_with(
             model="ollama/llama3.2",
             messages=[{"role": "user", "content": "Hi"}],
-            tools=None, response_format=None, stream=True,
+            tools=None,
+            response_format=None,
+            stream=True,
+            timeout=30,
         )
 
     @patch("app.services.llm_client.litellm")
@@ -116,7 +122,12 @@ class TestRetryLogic:
 
         orig = llm_module.acompletion
         llm_module.acompletion = AsyncMock(
-            side_effect=litellm.RateLimitError("always limited", "openai", "gpt-4o", response=MagicMock(status_code=429))
+            side_effect=litellm.RateLimitError(
+                "always limited",
+                "openai",
+                "gpt-4o",
+                response=MagicMock(status_code=429),
+            )
         )
 
         try:
@@ -158,9 +169,24 @@ class TestFallbackChain:
         # Primary "claude-3-5-sonnet" fails with rate limit x3, fallback "claude-3-7-sonnet" succeeds
         llm_module.acompletion = AsyncMock(
             side_effect=[
-                litellm.RateLimitError("rate limited", "openai", "claude-3-5-sonnet", response=MagicMock(status_code=429)),
-                litellm.RateLimitError("rate limited", "openai", "claude-3-5-sonnet", response=MagicMock(status_code=429)),
-                litellm.RateLimitError("rate limited", "openai", "claude-3-5-sonnet", response=MagicMock(status_code=429)),
+                litellm.RateLimitError(
+                    "rate limited",
+                    "openai",
+                    "claude-3-5-sonnet",
+                    response=MagicMock(status_code=429),
+                ),
+                litellm.RateLimitError(
+                    "rate limited",
+                    "openai",
+                    "claude-3-5-sonnet",
+                    response=MagicMock(status_code=429),
+                ),
+                litellm.RateLimitError(
+                    "rate limited",
+                    "openai",
+                    "claude-3-5-sonnet",
+                    response=MagicMock(status_code=429),
+                ),
                 success_response,
             ]
         )
@@ -179,7 +205,12 @@ class TestFallbackChain:
 
         orig = llm_module.acompletion
         llm_module.acompletion = AsyncMock(
-            side_effect=litellm.RateLimitError("always limited", "openai", "gpt-4o", response=MagicMock(status_code=429))
+            side_effect=litellm.RateLimitError(
+                "always limited",
+                "openai",
+                "gpt-4o",
+                response=MagicMock(status_code=429),
+            )
         )
 
         try:
@@ -214,6 +245,7 @@ class TestFallbackChain:
 class TestTools:
     def test_tools_defined_correctly(self):
         from app.services.llm_client import tools
+
         assert len(tools) == 2
         names = [t["function"]["name"] for t in tools]
         assert "web_search" in names

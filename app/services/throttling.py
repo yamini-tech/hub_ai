@@ -1,8 +1,10 @@
-import time
 import os
+import time
 import uuid
-import tiktoken
 from collections import defaultdict
+
+import tiktoken
+
 from app.services.usage_tracker import get_api_key
 
 # Per-session rate tracking (in-memory fallback)
@@ -19,9 +21,13 @@ def _get_rate_limiter():
         redis_port = int(os.getenv("REDIS_PORT", "6379"))
         try:
             import redis as redis_module
+
             r = redis_module.Redis(
-                host=redis_host, port=redis_port, db=0,
-                decode_responses=True, socket_connect_timeout=1,
+                host=redis_host,
+                port=redis_port,
+                db=0,
+                decode_responses=True,
+                socket_connect_timeout=1,
             )
             r.ping()
             _REDIS_RATE_LIMITER = r
@@ -37,9 +43,11 @@ def get_token_count(text: str, model: str = "gpt-4o-mini") -> int:
         encoding = tiktoken.get_encoding("cl100k_base")
     return len(encoding.encode(text))
 
+
 def is_request_allowed(text: str, max_tokens: int = 10000) -> tuple[bool, int]:
     count = get_token_count(text)
     return count <= max_tokens, count
+
 
 def resolve_user_key(session_id: str) -> str:
     api_key = get_api_key()

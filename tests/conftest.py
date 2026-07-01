@@ -1,11 +1,8 @@
-import sys
 import os
-import json
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-import time
-from unittest.mock import MagicMock, AsyncMock, patch, PropertyMock
-from typing import Any
-from collections import defaultdict
 
 os.environ.setdefault("SMARTHUB_API_KEY", "")
 os.environ.setdefault("REDIS_HOST", "localhost")
@@ -35,24 +32,28 @@ sys.modules["chromadb"] = chromadb_mock
 @pytest.fixture(autouse=True)
 def clear_throttling():
     from app.services.throttling import _rate_windows
+
     _rate_windows.clear()
 
 
 @pytest.fixture(autouse=True)
 def clear_chat_histories():
     from app.routers.chat import chat_histories
+
     chat_histories.clear()
 
 
 @pytest.fixture(autouse=True)
 def clear_job_store():
     from app.services.job_manager import _memory_store
+
     _memory_store.clear()
 
 
 @pytest.fixture(autouse=True)
 def clear_llm_cache():
     from app.services.cache import clear_cache
+
     clear_cache()
 
 
@@ -98,11 +99,13 @@ def mock_chroma_collection():
 @pytest.fixture
 def app():
     from app.main import app as _app
+
     return _app
 
 
 @pytest.fixture
 def client(app):
     from fastapi.testclient import TestClient
+
     with TestClient(app) as c:
         yield c

@@ -1,6 +1,4 @@
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from app.schemas import TaskType
+from unittest.mock import MagicMock
 
 
 class TestGateway:

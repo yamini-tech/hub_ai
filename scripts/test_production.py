@@ -10,6 +10,7 @@ Tests like a real client: SSE parsing, sync responses, async jobs, auth, health.
 import json
 import sys
 import time
+
 import httpx
 
 BASE = "http://localhost:8003"
@@ -31,7 +32,9 @@ def test(name):
             except Exception as e:
                 print(f"  FAIL  {name}: {e}")
                 failed += 1
+
         return wrapper
+
     return decorator
 
 
@@ -155,7 +158,11 @@ def test_process():
     r = httpx.post(
         f"{BASE}/api/ai/process",
         headers=HEADERS,
-        json={"text": "Summarize this: AI is transforming the world.", "task_type": "summarize", "session_id": "prod-process"},
+        json={
+            "text": "Summarize this: AI is transforming the world.",
+            "task_type": "summarize",
+            "session_id": "prod-process",
+        },
         timeout=TIMEOUT,
     )
     assert r.status_code == 202
@@ -201,7 +208,7 @@ def test_job_not_found():
 
 
 def main():
-    print(f"\nSmartHub AI Brain — Production Test Suite")
+    print("\nSmartHub AI Brain — Production Test Suite")
     print(f"Target: {BASE}")
     print(f"{'='*50}")
 

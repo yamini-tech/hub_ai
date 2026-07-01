@@ -1,5 +1,3 @@
-import os
-
 PRICING_TABLE = {
     "gpt-4o-mini": {"prompt": 0.15, "completion": 0.60},
     "gpt-4o": {"prompt": 2.50, "completion": 10.00},

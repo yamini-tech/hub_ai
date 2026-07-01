@@ -1,6 +1,6 @@
 import json
-import litellm
 
+import litellm
 
 JUDGE_PROMPT = """You are evaluating an AI assistant's response.
 ---

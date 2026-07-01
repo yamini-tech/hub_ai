@@ -1,5 +1,7 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+
 from app.services.pii_redactor import redact_pii, redact_stream
 
 
@@ -93,6 +95,7 @@ class TestRedactStream:
     @pytest.mark.asyncio
     async def test_call_llm_redacts_pii(self):
         from unittest.mock import patch
+
         from app.services.llm_client import call_llm
 
         with patch("app.services.llm_client.litellm") as mock_litellm:

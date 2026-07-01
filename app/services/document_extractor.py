@@ -47,12 +47,15 @@ def extract_text(file_path: str, file_type: str) -> str:
     else:
         return _extract_image(safe_path)
 
+
 def _extract_txt(file_path: str) -> str:
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(file_path, encoding="utf-8", errors="replace") as f:
         return f.read()
+
 
 def _extract_pdf(file_path: str) -> str:
     import fitz
+
     doc = fitz.open(file_path)
     pages = []
     for page in doc:
@@ -60,16 +63,18 @@ def _extract_pdf(file_path: str) -> str:
     doc.close()
     return "\n".join(pages)
 
+
 def _extract_docx(file_path: str) -> str:
     from docx import Document
+
     doc = Document(file_path)
     return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
 
 def _extract_image(file_path: str) -> str:
     try:
-        from PIL import Image
         import pytesseract
+        from PIL import Image
     except ImportError:
         return "[Image OCR requires 'pytesseract' package. Install with: pip install pytesseract]"
     try:

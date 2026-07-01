@@ -30,6 +30,19 @@ docker build -t hub-ai-brain .
 docker run -p 8003:8003 --env-file .env hub-ai-brain
 ```
 
+## Common Commands
+
+```bash
+pip install -r requirements.txt                                                  # Install dependencies
+python -m pytest tests/ -q --tb=short                                            # Run tests
+uvicorn app.main:app --reload --port 8003                                        # Start dev server
+ruff check .                                                                     # Lint code
+ruff format .                                                                    # Format code
+PYTHONPATH=. python evals/run.py                                                 # Run eval harness
+docker build -t hub_ai .                                                         # Build Docker image
+find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true          # Clean cache
+```
+
 ## How SmartHub Integrates (The Abstraction Layer)
 
 SmartHub calls the Brain. The Brain calls the LLM. SmartHub never touches a model API.

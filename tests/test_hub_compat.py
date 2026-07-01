@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch
 
 
 class TestChatStream:
@@ -80,7 +79,9 @@ class TestExtract:
         assert response.status_code == 400
 
     def test_extract_txt_success(self, client, mock_tiktoken):
-        import tempfile, os
+        import os
+        import tempfile
+
         content = "Extracted text content."
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(content)

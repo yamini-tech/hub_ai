@@ -1,13 +1,21 @@
 import asyncio
+import json
+import logging
+import os
+
 import litellm
-from httpx import TimeoutException, ConnectError
 from fastapi import HTTPException
-from app.services.usage_tracker import record_llm_usage
+from httpx import ConnectError, TimeoutException
+
 from app.services.cache import get_cache, set_cache
-from app.services.pii_redactor import redact_pii, redact_stream
-from app.services.injection_detector import check_injection
-from app.services.content_filter import check_content, filter_stream, _BLOCKED_RESPONSE
 from app.services.config_watcher import get_config_watcher
+from app.services.content_filter import _BLOCKED_RESPONSE, check_content, filter_stream
+from app.services.injection_detector import check_injection
+from app.services.pii_redactor import redact_pii, redact_stream
+from app.services.usage_tracker import record_llm_usage
+
+logger = logging.getLogger("smartbrain")
+_DEBUG = os.getenv("SMARTHUB_DEBUG", "").lower() in ("1", "true", "yes")
 
 RETRY_MAX = 3
 RETRY_BASE_DELAY = 1.0
@@ -22,12 +30,10 @@ tools = [
             "description": "Search the web for real-time information",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "The search query"}
-                },
-                "required": ["query"]
-            }
-        }
+                "properties": {"query": {"type": "string", "description": "The search query"}},
+                "required": ["query"],
+            },
+        },
     },
     {
         "type": "function",
@@ -37,9 +43,9 @@ tools = [
             "parameters": {
                 "type": "object",
                 "properties": {},
-            }
-        }
-    }
+            },
+        },
+    },
 ]
 
 _RETRYABLE = (TimeoutException, ConnectError, litellm.RateLimitError)
@@ -57,7 +63,7 @@ async def _call_with_retry(coro_factory):
         except _RETRYABLE as e:
             last_exc = e
             if attempt < RETRY_MAX - 1:
-                await asyncio.sleep(RETRY_BASE_DELAY * (2 ** attempt))
+                await asyncio.sleep(RETRY_BASE_DELAY * (2**attempt))
         except Exception:
             raise
     raise HTTPException(
@@ -91,6 +97,8 @@ async def _call_with_fallback(coro_factory, model: str):
 
 async def call_llm(messages: list, tools_list=None, response_format=None, model=None):
     model = model or DEFAULT_MODEL
+    if _DEBUG:
+        logger.debug("LLM request [%s]: %s", model, json.dumps(messages, default=str, indent=2))
     for m in messages:
         if m.get("role") == "user" and m.get("content"):
             injection = check_injection(m["content"])
@@ -104,6 +112,7 @@ async def call_llm(messages: list, tools_list=None, response_format=None, model=
     try:
         response, model_used = await _call_with_fallback(
             lambda m: litellm.acompletion(
+                timeout=30,
                 model=m,
                 messages=messages,
                 tools=tools_list,
@@ -126,6 +135,8 @@ async def call_llm(messages: list, tools_list=None, response_format=None, model=
             safe, reason = check_content(result.content)
             if not safe:
                 result.content = _BLOCKED_RESPONSE
+        if _DEBUG:
+            logger.debug("LLM response [%s]: %s", model_used, result.content or result.tool_calls)
         set_cache(messages, model_used, result, tools_list, response_format)
         return result
     except HTTPException:
@@ -136,6 +147,8 @@ async def call_llm(messages: list, tools_list=None, response_format=None, model=
 
 async def call_llm_stream(messages: list, tools_list=None, model=None, response_format=None):
     model = model or DEFAULT_MODEL
+    if _DEBUG:
+        logger.debug("LLM stream request [%s]: %s", model, json.dumps(messages, default=str, indent=2))
     for m in messages:
         if m.get("role") == "user" and m.get("content"):
             injection = check_injection(m["content"])
@@ -149,6 +162,7 @@ async def call_llm_stream(messages: list, tools_list=None, model=None, response_
                 tools=tools_list,
                 response_format=response_format,
                 stream=True,
+                timeout=30,
             ),
             model=model,
         )
@@ -157,5 +171,3 @@ async def call_llm_stream(messages: list, tools_list=None, model=None, response_
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-

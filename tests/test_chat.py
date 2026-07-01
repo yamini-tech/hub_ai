@@ -1,5 +1,4 @@
-from unittest.mock import MagicMock, AsyncMock
-import json
+from unittest.mock import MagicMock
 
 
 class TestAgentEndpoint:
@@ -12,10 +11,12 @@ class TestAgentEndpoint:
             chunk.choices = [MagicMock()]
             chunk.choices[0].delta = delta
             yield chunk
+
         return generate()
 
     def test_agent_stream_cross_session_stores_exchange(self, client, mock_tiktoken):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
+
         with patch("app.routers.chat.call_llm_stream", new=self._mock_stream):
             with patch("app.routers.chat.save_to_knowledge_base") as mock_save:
                 response = client.post(
@@ -33,6 +34,7 @@ class TestAgentEndpoint:
 
     def test_agent_stream_cross_session_false_does_not_store(self, client, mock_tiktoken):
         from unittest.mock import patch
+
         with patch("app.routers.chat.call_llm_stream", new=self._mock_stream):
             with patch("app.routers.chat.save_to_knowledge_base") as mock_save:
                 response = client.post(
@@ -77,16 +79,14 @@ class TestAgentEndpoint:
 
 class TestAgentSyncEndpoint:
     def test_agent_sync_handles_malformed_tool_args(self, client, mock_tiktoken):
-        from unittest.mock import patch, AsyncMock, MagicMock
+        from unittest.mock import MagicMock, patch
+
         with patch("app.routers.chat.call_llm") as mock_call_llm:
             mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
             mock_message = MagicMock()
             mock_message.content = None
             mock_message.tool_calls = [
-                MagicMock(
-                    id="call_1",
-                    function=MagicMock(name="web_search", arguments="not valid json{{{")
-                )
+                MagicMock(id="call_1", function=MagicMock(name="web_search", arguments="not valid json{{{"))
             ]
             mock_call_llm.return_value = mock_message
 
@@ -120,6 +120,7 @@ class TestAgentSyncEndpoint:
 
     def test_agent_sync_cross_session_stores_exchange(self, client, mock_litellm_acompletion, mock_tiktoken):
         from unittest.mock import patch
+
         mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
         with patch("app.routers.chat.save_to_knowledge_base") as mock_save:
             response = client.post(
@@ -137,6 +138,7 @@ class TestAgentSyncEndpoint:
 
     def test_agent_sync_cross_session_false_does_not_store(self, client, mock_litellm_acompletion, mock_tiktoken):
         from unittest.mock import patch
+
         mock_tiktoken.encoding_for_model.return_value.encode.return_value = [1] * 5
         with patch("app.routers.chat.save_to_knowledge_base") as mock_save:
             response = client.post(
@@ -196,6 +198,7 @@ class TestStatusEndpoint:
         job_id = create_resp.json()["job_id"]
 
         import time
+
         time.sleep(0.5)
 
         response = client.get(f"/api/ai/status/{job_id}")

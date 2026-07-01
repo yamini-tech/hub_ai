@@ -1,22 +1,25 @@
 import asyncio
 import json
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
+
+from app.core.config import RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_SEC
 from app.schemas import AIRequest
+from app.services.job_manager import create_job, get_job
 from app.services.llm_client import call_llm, call_llm_stream, tools
 from app.services.memory_manager import read_knowledge_base, save_to_knowledge_base, summarize_knowledge
-from app.services.search_service import web_search
-from app.services.task_processor import run_llm_task
-from app.services.throttling import is_request_allowed, check_rate_limit_by_user
-from app.services.job_manager import create_job, get_job
 from app.services.model_selector import select_model
 from app.services.prompt_manager import get_system_prompt
-from app.core.config import MODEL_NAME, API_BASE, RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX_REQUESTS
+from app.services.search_service import web_search
+from app.services.task_processor import run_llm_task
+from app.services.throttling import check_rate_limit_by_user, is_request_allowed
 
 router = APIRouter()
 chat_histories: dict[str, list[dict]] = {}
 MAX_HISTORY_PER_SESSION = 50
 MAX_SESSIONS = 1000
+_MAX_TOOL_DEPTH = 5
 
 
 def _trim_session(session_id: str):
@@ -36,12 +39,17 @@ def _evict_sessions():
         for key in list(chat_histories.keys())[:excess]:
             del chat_histories[key]
 
+
 @router.post("/agent")
 async def agent_endpoint(request: AIRequest):
     allowed, count = is_request_allowed(request.text, max_tokens=10000)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count} tokens.")
-    rate_ok, req_count = check_rate_limit_by_user(request.session_id, window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(
+        request.session_id,
+        window_sec=RATE_LIMIT_WINDOW_SEC,
+        max_requests=RATE_LIMIT_MAX_REQUESTS,
+    )
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -52,7 +60,7 @@ async def agent_endpoint(request: AIRequest):
         await asyncio.to_thread(save_to_knowledge_base, content_to_save)
         return {"answer": "I have stored that in my memory."}
 
-    model = select_model("agent", text)
+    model = request.model or select_model("agent", text)
     context = await asyncio.to_thread(read_knowledge_base, request.text)
     if context and context not in ("No relevant context found.", "Knowledge base is empty."):
         system_prompt = get_system_prompt("agent", context=context)
@@ -69,49 +77,55 @@ async def agent_endpoint(request: AIRequest):
     _trim_session(session_id)
 
     async def generate():
-        stream = await call_llm_stream(messages, tools_list=tools, model=model)
         full_content = ""
-        tool_calls_buffer = []
-        try:
-            async with asyncio.timeout(120):
-                async for chunk in stream:
-                    delta = chunk.choices[0].delta
-                    if delta.content:
-                        full_content += delta.content
-                        yield f"data: {json.dumps({'delta': delta.content})}\n\n"
-                    if delta.tool_calls:
-                        for tc in delta.tool_calls:
-                            if len(tool_calls_buffer) <= tc.index:
-                                tool_calls_buffer.append({"id": "", "function": {"name": "", "arguments": ""}})
-                            if tc.id:
-                                tool_calls_buffer[tc.index]["id"] = tc.id
-                            if tc.function:
-                                if tc.function.name:
-                                    tool_calls_buffer[tc.index]["function"]["name"] = tc.function.name
-                                if tc.function.arguments:
-                                    tool_calls_buffer[tc.index]["function"]["arguments"] += tc.function.arguments
-        except TimeoutError:
-            yield 'data: {"error": "stream_timeout"}\n\n'
-            return
-        if tool_calls_buffer:
+        for turn in range(_MAX_TOOL_DEPTH):
+            stream = await call_llm_stream(messages, tools_list=tools, model=model)
+            tool_calls_buffer = []
+            try:
+                async with asyncio.timeout(120):
+                    async for chunk in stream:
+                        delta = chunk.choices[0].delta
+                        if delta.content:
+                            full_content += delta.content
+                            yield f"data: {json.dumps({'delta': delta.content})}\n\n"
+                        if delta.tool_calls:
+                            for tc in delta.tool_calls:
+                                if len(tool_calls_buffer) <= tc.index:
+                                    tool_calls_buffer.append({"id": "", "function": {"name": "", "arguments": ""}})
+                                if tc.id:
+                                    tool_calls_buffer[tc.index]["id"] = tc.id
+                                if tc.function:
+                                    if tc.function.name:
+                                        tool_calls_buffer[tc.index]["function"]["name"] = tc.function.name
+                                    if tc.function.arguments:
+                                        tool_calls_buffer[tc.index]["function"]["arguments"] += tc.function.arguments
+            except TimeoutError:
+                yield 'data: {"error": "stream_timeout"}\n\n'
+                return
+
+            if not tool_calls_buffer:
+                break
+
             yield f"data: __tool_calls__:{json.dumps(tool_calls_buffer)}\n\n"
+            tools_executed = 0
             for tc in tool_calls_buffer:
-                args = json.loads(tc["function"]["arguments"])
+                try:
+                    args = json.loads(tc["function"]["arguments"])
+                except json.JSONDecodeError:
+                    continue
                 tool_result = ""
                 if tc["function"]["name"] == "web_search":
                     tool_result = await web_search(args["query"])
                 elif tc["function"]["name"] == "read_knowledge_base":
                     tool_result = await asyncio.to_thread(read_knowledge_base, query=request.text)
                 messages.append({"role": "tool", "tool_call_id": tc["id"], "content": str(tool_result)})
-            stream2 = await call_llm_stream(messages, model=model)
-            try:
-                async with asyncio.timeout(120):
-                    async for chunk in stream2:
-                        if content := chunk.choices[0].delta.content:
-                            full_content += content
-                            yield f"data: {json.dumps({'delta': content})}\n\n"
-            except TimeoutError:
-                yield 'data: {"error": "stream_timeout"}\n\n'
+                tools_executed += 1
+            if tools_executed == 0:
+                break
+        else:
+            yield 'data: {"error": "max_tool_depth_exceeded"}\n\n'
+            return
+
         messages.append({"role": "assistant", "content": full_content})
         _trim_session(session_id)
         if request.cross_session and full_content:
@@ -121,12 +135,17 @@ async def agent_endpoint(request: AIRequest):
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
+
 @router.post("/agent/sync")
 async def agent_sync(request: AIRequest):
     allowed, count = is_request_allowed(request.text, max_tokens=10000)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count} tokens.")
-    rate_ok, req_count = check_rate_limit_by_user(request.session_id, window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(
+        request.session_id,
+        window_sec=RATE_LIMIT_WINDOW_SEC,
+        max_requests=RATE_LIMIT_MAX_REQUESTS,
+    )
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -142,7 +161,7 @@ async def agent_sync(request: AIRequest):
         result = await summarize_knowledge()
         return {"answer": result}
 
-    model = select_model("agent", text)
+    model = request.model or select_model("agent", text)
     context = await asyncio.to_thread(read_knowledge_base, request.text)
     if context and context not in ("No relevant context found.", "Knowledge base is empty."):
         system_prompt = get_system_prompt("agent", context=context)
@@ -157,10 +176,20 @@ async def agent_sync(request: AIRequest):
     messages.append({"role": "user", "content": request.text})
     _trim_session(session_id)
 
-    message = await call_llm(messages, model=model, tools_list=tools)
-    messages.append(message)
+    for turn in range(_MAX_TOOL_DEPTH):
+        message = await call_llm(messages, model=model, tools_list=tools)
+        messages.append(message)
 
-    if message.tool_calls:
+        if not message.tool_calls:
+            final_answer = message.content or ""
+            messages.append({"role": "assistant", "content": final_answer})
+            _trim_session(session_id)
+            if request.cross_session and final_answer:
+                exchange = f"[session:{session_id}] User: {request.text[:200]} | Assistant: {final_answer[:500]}"
+                await asyncio.to_thread(save_to_knowledge_base, exchange)
+            return {"answer": final_answer}
+
+        tools_executed = 0
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
             try:
@@ -172,38 +201,37 @@ async def agent_sync(request: AIRequest):
                 tool_result = await web_search(args["query"])
             elif tool_name == "read_knowledge_base":
                 tool_result = await asyncio.to_thread(read_knowledge_base, query=request.text)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": str(tool_result)
-            })
-        final_message = await call_llm(messages, model=model)
-        final_answer = final_message.content
-        messages.append({"role": "assistant", "content": final_answer})
-        _trim_session(session_id)
-        if request.cross_session and final_answer:
-            exchange = f"[session:{session_id}] User: {request.text[:200]} | Assistant: {final_answer[:500]}"
-            await asyncio.to_thread(save_to_knowledge_base, exchange)
-        return {"answer": final_answer}
+            messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(tool_result)})
+            tools_executed += 1
+        if tools_executed == 0:
+            break
+    else:
+        raise HTTPException(status_code=500, detail="Agent exceeded max tool call depth")
 
-    messages.append({"role": "assistant", "content": message.content})
+    # tools_executed was 0 — use last message content as final answer
     _trim_session(session_id)
     if request.cross_session and message.content:
         exchange = f"[session:{session_id}] User: {request.text[:200]} | Assistant: {message.content[:500]}"
         await asyncio.to_thread(save_to_knowledge_base, exchange)
-    return {"answer": message.content}
+    return {"answer": message.content or ""}
+
 
 @router.post("/ai/process", status_code=202)
 async def process_request(ai_req: AIRequest, background_tasks: BackgroundTasks):
     allowed, count = is_request_allowed(ai_req.text, max_tokens=10000)
     if not allowed:
         raise HTTPException(status_code=429, detail=f"Input exceeds token limit: {count} tokens.")
-    rate_ok, req_count = check_rate_limit_by_user(ai_req.session_id, window_sec=RATE_LIMIT_WINDOW_SEC, max_requests=RATE_LIMIT_MAX_REQUESTS)
+    rate_ok, req_count = check_rate_limit_by_user(
+        ai_req.session_id,
+        window_sec=RATE_LIMIT_WINDOW_SEC,
+        max_requests=RATE_LIMIT_MAX_REQUESTS,
+    )
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
     job_id = create_job()
     background_tasks.add_task(run_llm_task, job_id, ai_req.task_type, ai_req.text, ai_req.session_id)
     return {"job_id": job_id, "status": "processing"}
+
 
 @router.get("/ai/status/{job_id}")
 async def get_status(job_id: str):
