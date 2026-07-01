@@ -210,7 +210,7 @@ def test_job_not_found():
 def main():
     print("\nSmartHub AI Brain — Production Test Suite")
     print(f"Target: {BASE}")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
 
     tests = [
         test_health,
@@ -230,7 +230,7 @@ def main():
     for t in tests:
         t()
 
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"Results: {passed} passed, {failed} failed out of {len(tests)}\n")
     return 0 if failed == 0 else 1
 

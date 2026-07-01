@@ -81,22 +81,6 @@ def mock_litellm_acompletion():
 
 
 @pytest.fixture
-def mock_litellm_completion():
-    with patch("litellm.completion") as mock:
-        mock_message = MagicMock()
-        mock_message.content = "test response"
-        mock_choice = MagicMock()
-        mock_choice.message = mock_message
-        mock.return_value = MagicMock(choices=[mock_choice])
-        yield mock
-
-
-@pytest.fixture
-def mock_chroma_collection():
-    return chroma_collection
-
-
-@pytest.fixture
 def app():
     from app.main import app as _app
 

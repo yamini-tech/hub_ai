@@ -6,7 +6,6 @@ from app.services.config_watcher import ConfigWatcher, get_config_watcher
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
-FILE_PATH = os.path.join(PROJECT_ROOT, "knowledge.txt")
 
 # Default model config — overridden by config.yaml if present
 MODEL_NAME = os.getenv("SMARTHUB_MODEL", "ollama/llama3.2")

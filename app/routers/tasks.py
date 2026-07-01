@@ -28,7 +28,7 @@ def _build_parse_messages(text: str, schema_hint: str | None = None, json_schema
         {
             "role": "user",
             "content": (
-                f"Parse the following unstructured text into structured data:" f"{hint}{schema_instruction}\n\n{text}"
+                f"Parse the following unstructured text into structured data:{hint}{schema_instruction}\n\n{text}"
             ),
         },
     ]
@@ -150,7 +150,7 @@ async def parse_unstructured_sync(request: ParseRequest):
                 {
                     "role": "user",
                     "content": (
-                        f"The previous output was not valid JSON. Error: {error}. " "Please return ONLY valid JSON."
+                        f"The previous output was not valid JSON. Error: {error}. Please return ONLY valid JSON."
                     ),
                 }
             )

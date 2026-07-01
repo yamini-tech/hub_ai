@@ -6,8 +6,6 @@ import pytest
 import app.services.throttling as throttling_mod
 from app.services.throttling import (
     _rate_windows,
-    check_rate_limit,
-    check_rate_limit_by_key,
     check_rate_limit_by_user,
     get_token_count,
     is_request_allowed,
@@ -93,46 +91,6 @@ class TestIsRequestAllowed:
         assert allowed_20k is True
 
 
-class TestCheckRateLimit:
-    def setup_method(self):
-        _rate_windows.clear()
-
-    def test_first_request_allowed(self):
-        ok, count = check_rate_limit("session1", window_sec=60, max_requests=5)
-        assert ok is True
-        assert count == 1
-
-    def test_within_limit(self):
-        _rate_windows["session1"] = [time.time() - 1 for _ in range(3)]
-        ok, count = check_rate_limit("session1", window_sec=60, max_requests=5)
-        assert ok is True
-        assert count == 4
-
-    def test_exceeds_limit(self):
-        _rate_windows["session1"] = [time.time() - 1 for _ in range(5)]
-        ok, count = check_rate_limit("session1", window_sec=60, max_requests=5)
-        assert ok is False
-        assert count == 5
-
-    def test_prunes_old_entries(self):
-        old = time.time() - 120
-        recent = time.time() - 1
-        _rate_windows["session1"] = [old, old, recent]
-        ok, count = check_rate_limit("session1", window_sec=60, max_requests=5)
-        assert ok is True
-        assert count == 2
-
-    def test_multiple_sessions_independent(self):
-        _rate_windows["session_a"] = [time.time() - 1 for _ in range(5)]
-        ok_a, count_a = check_rate_limit("session_a", window_sec=60, max_requests=5)
-        assert ok_a is False
-        assert count_a == 5
-
-        ok_b, count_b = check_rate_limit("session_b", window_sec=60, max_requests=5)
-        assert ok_b is True
-        assert count_b == 1
-
-
 class TestResolveUserKey:
     def setup_method(self):
         from app.services.usage_tracker import api_key_var
@@ -180,38 +138,5 @@ class TestCheckRateLimitByUser:
         set_api_key("sk-test-key-12345")
         _rate_windows["user:sk-test-"] = [time.time() - 1 for _ in range(5)]
         ok, count = check_rate_limit_by_user("sess_any", window_sec=60, max_requests=5)
-        assert ok is False
-        assert count == 5
-
-
-class TestCheckRateLimitByKey:
-    def setup_method(self):
-        _rate_windows.clear()
-
-    def test_empty_key_returns_ok(self):
-        ok, count = check_rate_limit_by_key("")
-        assert ok is True
-        assert count == 0
-
-    def test_none_key_returns_ok(self):
-        ok, count = check_rate_limit_by_key(None)
-        assert ok is True
-        assert count == 0
-
-    def test_first_request_allowed(self):
-        ok, count = check_rate_limit_by_key("sk-test-key-12345", window_sec=60, max_requests=5)
-        assert ok is True
-        assert count == 1
-
-    def test_within_limit(self):
-        ok, count = check_rate_limit_by_key("sk-test-key-12345", window_sec=60, max_requests=5)
-        assert ok is True
-        ok, count = check_rate_limit_by_key("sk-test-key-12345", window_sec=60, max_requests=5)
-        assert ok is True
-        assert count == 2
-
-    def test_exceeds_limit(self):
-        _rate_windows["apikey:sk-test-"] = [time.time() - 1 for _ in range(5)]
-        ok, count = check_rate_limit_by_key("sk-test-key-12345", window_sec=60, max_requests=5)
         assert ok is False
         assert count == 5

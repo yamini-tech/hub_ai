@@ -1,7 +1,6 @@
 from app.services.usage_tracker import (
     get_api_key,
     get_request_id,
-    get_user_usage,
     pop_usage,
     record_llm_usage,
     set_api_key,
@@ -52,35 +51,3 @@ class TestUsageTracker:
 
     def test_pop_nonexistent(self):
         assert pop_usage("nonexistent") is None
-
-    def test_get_user_usage_no_key(self):
-        assert get_user_usage(None) is None
-        assert get_user_usage("") is None
-
-    def test_get_user_usage_records(self):
-        from app.services.usage_tracker import _user_usage_store
-
-        _user_usage_store.clear()
-        set_request_id("req-2")
-        set_api_key("sk-test-api-key-12345")
-        record_llm_usage(model="gpt-4o", prompt_tokens=10, completion_tokens=20)
-        result = get_user_usage("sk-test-api-key-12345")
-        assert result is not None
-        assert result["prompt_tokens"] == 10
-        assert result["completion_tokens"] == 20
-
-    def test_user_usage_aggregates(self):
-        from app.services.usage_tracker import _usage_store, _user_usage_store
-
-        _usage_store.clear()
-        _user_usage_store.clear()
-        set_api_key("sk-test-key")
-        set_request_id("req-3")
-        record_llm_usage(model="gpt-4o", prompt_tokens=5, completion_tokens=5)
-        set_request_id("req-4")
-        record_llm_usage(model="gpt-4o", prompt_tokens=5, completion_tokens=5)
-        result = get_user_usage("sk-test-key")
-        assert result is not None
-        assert result["prompt_tokens"] == 10
-        assert result["completion_tokens"] == 10
-        assert result["total_tokens"] == 20

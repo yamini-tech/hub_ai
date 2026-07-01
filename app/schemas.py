@@ -24,12 +24,6 @@ class ParseRequest(BaseModel):
     session_id: str = Field("default_session", description="Session ID for rate limiting")
 
 
-class SentimentResponse(BaseModel):
-    sentiment: str = Field(..., pattern="^(positive|negative|neutral)$")
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    key_phrases: list[str] = Field(..., max_length=20)
-
-
 class TaskType(StrEnum):
     SUMMARIZE = "summarize"
     PARSE = "parse"

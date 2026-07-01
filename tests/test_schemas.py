@@ -5,7 +5,6 @@ from app.schemas import (
     AIRequest,
     GatewayRequest,
     ParseRequest,
-    SentimentResponse,
     SummarizeRequest,
     TaskType,
 )
@@ -66,40 +65,6 @@ class TestParseRequest:
     def test_empty_fails(self):
         with pytest.raises(ValidationError):
             ParseRequest(text="")
-
-
-class TestSentimentResponse:
-    def test_valid_positive(self):
-        resp = SentimentResponse(sentiment="positive", confidence=0.95, key_phrases=["good", "great"])
-        assert resp.sentiment == "positive"
-
-    def test_valid_negative(self):
-        resp = SentimentResponse(sentiment="negative", confidence=0.8, key_phrases=["bad"])
-        assert resp.sentiment == "negative"
-
-    def test_valid_neutral(self):
-        resp = SentimentResponse(sentiment="neutral", confidence=0.5, key_phrases=["ok"])
-        assert resp.sentiment == "neutral"
-
-    def test_invalid_sentiment_fails(self):
-        with pytest.raises(ValidationError):
-            SentimentResponse(sentiment="unknown", confidence=0.5, key_phrases=["ok"])
-
-    def test_confidence_too_low_fails(self):
-        with pytest.raises(ValidationError):
-            SentimentResponse(sentiment="positive", confidence=-0.1, key_phrases=["ok"])
-
-    def test_confidence_too_high_fails(self):
-        with pytest.raises(ValidationError):
-            SentimentResponse(sentiment="positive", confidence=1.5, key_phrases=["ok"])
-
-    def test_too_many_key_phrases_fails(self):
-        with pytest.raises(ValidationError):
-            SentimentResponse(
-                sentiment="positive",
-                confidence=0.5,
-                key_phrases=["a"] * 21,
-            )
 
 
 class TestTaskType:

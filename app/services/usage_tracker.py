@@ -64,10 +64,3 @@ def record_llm_usage(model: str, prompt_tokens: int, completion_tokens: int):
 def pop_usage(request_id: str) -> dict | None:
     with _lock:
         return _usage_store.pop(request_id, None)
-
-
-def get_user_usage(api_key: str | None = None) -> dict | None:
-    if not api_key:
-        return None
-    with _lock:
-        return _user_usage_store.get(f"user:{api_key[:8]}")

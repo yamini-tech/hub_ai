@@ -56,25 +56,8 @@ def resolve_user_key(session_id: str) -> str:
     return f"session:{session_id}"
 
 
-def check_rate_limit(session_id: str, window_sec: int = 60, max_requests: int = 30) -> tuple[bool, int]:
-    r = _get_rate_limiter()
-    if r is not None:
-        return _check_rate_limit_redis(r, session_id, window_sec, max_requests)
-    return _check_rate_limit_memory(session_id, window_sec, max_requests)
-
-
 def check_rate_limit_by_user(session_id: str, window_sec: int = 60, max_requests: int = 30) -> tuple[bool, int]:
     key = resolve_user_key(session_id)
-    r = _get_rate_limiter()
-    if r is not None:
-        return _check_rate_limit_redis(r, key, window_sec, max_requests)
-    return _check_rate_limit_memory(key, window_sec, max_requests)
-
-
-def check_rate_limit_by_key(api_key: str, window_sec: int = 60, max_requests: int = 30) -> tuple[bool, int]:
-    if not api_key:
-        return True, 0
-    key = f"apikey:{api_key[:8]}"
     r = _get_rate_limiter()
     if r is not None:
         return _check_rate_limit_redis(r, key, window_sec, max_requests)

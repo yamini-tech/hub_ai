@@ -75,8 +75,7 @@ def print_summary(report: dict[str, Any]) -> None:
     print(f"  Eval Results — {report['run_id']}")
     print(f"{sep}")
     print(
-        f"  Total:  {s['total']:3d}   Passed: {s['passed']:3d}   "
-        f"Failed: {s['failed']:3d}   Rate: {s['pass_rate_pct']}%"
+        f"  Total:  {s['total']:3d}   Passed: {s['passed']:3d}   Failed: {s['failed']:3d}   Rate: {s['pass_rate_pct']}%"
     )
     if s["avg_judge_score"] is not None:
         print(f"  Avg Judge Score: {s['avg_judge_score']:.2f} / 5.00")

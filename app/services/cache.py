@@ -54,8 +54,3 @@ def clear_cache():
         _cache.clear()
         _cache_stats["hits"] = 0
         _cache_stats["misses"] = 0
-
-
-def get_cache_stats():
-    with _cache_lock:
-        return dict(_cache_stats, size=len(_cache))

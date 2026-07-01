@@ -84,12 +84,7 @@ class TestModelMap:
             assert task in TASK_MODEL_MAP
 
 
-class TestKnowledgeFilePath:
-    def test_knowledge_file_path_exists(self):
-        from app.core.config import FILE_PATH
-
-        assert "knowledge.txt" in FILE_PATH
-
+class TestProjectRoot:
     def test_project_root_is_absolute(self):
         from app.core.config import PROJECT_ROOT
 

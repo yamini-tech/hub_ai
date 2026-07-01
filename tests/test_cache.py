@@ -42,26 +42,3 @@ class TestLlmCache:
         set_cache(messages, "ttl-model", msg)
         cached = get_cache(messages, "ttl-model")
         assert cached is None
-
-    def test_cache_stats(self):
-        from app.services.cache import clear_cache, get_cache, get_cache_stats, set_cache
-
-        clear_cache()
-        stats = get_cache_stats()
-        assert stats["hits"] == 0
-        assert stats["misses"] == 0
-        assert stats["size"] == 0
-
-        msg = MagicMock()
-        msg.content = "x"
-        set_cache([{"role": "user", "content": "stats"}], "stats-model", msg)
-        stats = get_cache_stats()
-        assert stats["size"] == 1
-
-        get_cache([{"role": "user", "content": "stats"}], "stats-model")
-        stats = get_cache_stats()
-        assert stats["hits"] == 1
-
-        get_cache([{"role": "user", "content": "miss-stats"}], "other-model")
-        stats = get_cache_stats()
-        assert stats["misses"] >= 1

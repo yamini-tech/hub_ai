@@ -75,7 +75,7 @@ async def _handle_parse(request: GatewayRequest):
     schema_instruction = ""
     if request.json_schema:
         schema_instruction = (
-            f"\nThe response MUST conform to this JSON Schema:\n" f"{json.dumps(request.json_schema, indent=2)}"
+            f"\nThe response MUST conform to this JSON Schema:\n{json.dumps(request.json_schema, indent=2)}"
         )
     messages = [
         {"role": "system", "content": system_prompt},

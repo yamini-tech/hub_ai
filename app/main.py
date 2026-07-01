@@ -146,8 +146,6 @@ async def metrics():
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    from fastapi.responses import JSONResponse
-
     return JSONResponse(
         status_code=500,
         content={"message": "An unexpected error occurred in the AI Brain", "details": str(exc)},
