@@ -21,6 +21,7 @@ RETRY_MAX = 3
 RETRY_BASE_DELAY = 1.0
 
 DEFAULT_MODEL = "ollama/llama3.2"
+_API_BASE = os.getenv("SMARTHUB_API_BASE")
 
 tools = [
     {
@@ -48,7 +49,7 @@ tools = [
     },
 ]
 
-_RETRYABLE = (TimeoutException, ConnectError, litellm.RateLimitError)
+_RETRYABLE = (TimeoutException, ConnectError, litellm.RateLimitError, litellm.APIConnectionError)
 
 
 def _get_fallback_models(model: str) -> list[str]:
@@ -117,6 +118,7 @@ async def call_llm(messages: list, tools_list=None, response_format=None, model=
                 messages=messages,
                 tools=tools_list,
                 response_format=response_format,
+                api_base=_API_BASE,
             ),
             model=model,
         )
@@ -163,6 +165,7 @@ async def call_llm_stream(messages: list, tools_list=None, model=None, response_
                 response_format=response_format,
                 stream=True,
                 timeout=30,
+                api_base=_API_BASE,
             ),
             model=model,
         )

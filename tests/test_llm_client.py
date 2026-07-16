@@ -35,6 +35,7 @@ class TestCallLlm:
             tools=None,
             response_format=None,
             timeout=30,
+            api_base=None,
         )
 
     @patch("app.services.llm_client.litellm")
@@ -74,6 +75,7 @@ class TestCallLlmStream:
             response_format=None,
             stream=True,
             timeout=30,
+            api_base=None,
         )
 
     @patch("app.services.llm_client.litellm")

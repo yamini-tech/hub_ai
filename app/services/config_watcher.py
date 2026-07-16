@@ -62,6 +62,7 @@ class ConfigWatcher:
         self._task_model_map = {
             "summarize": model_map.get("smart-hub-summarizer", self._default_model),
             "chat": model_map.get("smart-hub-hf-chat", self._default_model),
+            "agent": model_map.get("smart-hub-hf-chat", self._default_model),
             "extraction": model_map.get("smart-hub-parser", self._default_model),
             "reasoning": model_map.get("smart-hub-reasoner", self._default_model),
             "parse": model_map.get("smart-hub-parser", self._default_model),

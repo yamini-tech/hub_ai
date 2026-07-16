@@ -10,9 +10,10 @@ model_list:
       api_key: os.environ/ANTHROPIC_API_KEY
   - model_name: smart-hub-hf-chat
     litellm_params:
-      model: huggingface/meta-llama/Meta-Llama-3-8B-Instruct
-      api_base: os.environ/HUGGINGFACE_API_BASE
-      api_key: os.environ/HUGGINGFACE_API_KEY
+    model : ollama/llama3.2 #using ollama for the testing purpose
+      # model: huggingface/meta-llama/Meta-Llama-3-8B-Instruct
+      # api_base: os.environ/HUGGINGFACE_API_BASE
+      # api_key: os.environ/HUGGINGFACE_API_KEY
   - model_name: smart-hub-reasoner
     litellm_params:
       model: anthropic/claude-3-7-sonnet-20250219

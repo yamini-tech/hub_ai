@@ -12,32 +12,17 @@ from app.services.memory_manager import read_knowledge_base, save_to_knowledge_b
 from app.services.model_selector import select_model
 from app.services.prompt_manager import get_system_prompt
 from app.services.search_service import web_search
+from app.services.session_manager import (
+    append_assistant_message,
+    build_llm_messages,
+    get_or_create_session,
+    store_session_fact,
+)
 from app.services.task_processor import run_llm_task
 from app.services.throttling import check_rate_limit_by_user, is_request_allowed
 
 router = APIRouter()
-chat_histories: dict[str, list[dict]] = {}
-MAX_HISTORY_PER_SESSION = 50
-MAX_SESSIONS = 1000
 _MAX_TOOL_DEPTH = 5
-
-
-def _trim_session(session_id: str):
-    messages = chat_histories.get(session_id)
-    if not messages:
-        return
-    if len(messages) > MAX_HISTORY_PER_SESSION:
-        keep = MAX_HISTORY_PER_SESSION // 2
-        system_msgs = [m for m in messages if m.get("role") == "system"]
-        other_msgs = [m for m in messages if m.get("role") != "system"]
-        chat_histories[session_id] = system_msgs + other_msgs[-keep:]
-
-
-def _evict_sessions():
-    if len(chat_histories) > MAX_SESSIONS:
-        excess = len(chat_histories) - MAX_SESSIONS
-        for key in list(chat_histories.keys())[:excess]:
-            del chat_histories[key]
 
 
 @router.post("/agent")
@@ -62,19 +47,13 @@ async def agent_endpoint(request: AIRequest):
 
     model = request.model or select_model("agent", text)
     context = await asyncio.to_thread(read_knowledge_base, request.text)
-    if context and context not in ("No relevant context found.", "Knowledge base is empty."):
-        system_prompt = get_system_prompt("agent", context=context)
-    else:
-        system_prompt = get_system_prompt("agent")
+    if not context or context in ("No relevant context found.", "Knowledge base is empty."):
+        context = ""
+    system_prompt = get_system_prompt("agent", context=context, session_context="")
 
     session_id = request.session_id
-    if session_id not in chat_histories:
-        _evict_sessions()
-        chat_histories[session_id] = [{"role": "system", "content": system_prompt}]
-    chat_histories[session_id][0]["content"] = system_prompt
-    messages = chat_histories[session_id]
-    messages.append({"role": "user", "content": request.text})
-    _trim_session(session_id)
+    get_or_create_session(session_id, system_prompt)
+    messages = build_llm_messages(session_id, system_prompt, request.text)
 
     async def generate():
         full_content = ""
@@ -87,7 +66,7 @@ async def agent_endpoint(request: AIRequest):
                         delta = chunk.choices[0].delta
                         if delta.content:
                             full_content += delta.content
-                            yield f"data: {json.dumps({'delta': delta.content})}\n\n"
+                            yield f"data: {json.dumps({'token': delta.content})}\n\n"
                         if delta.tool_calls:
                             for tc in delta.tool_calls:
                                 if len(tool_calls_buffer) <= tc.index:
@@ -107,7 +86,7 @@ async def agent_endpoint(request: AIRequest):
                 break
 
             yield f"data: __tool_calls__:{json.dumps(tool_calls_buffer)}\n\n"
-            tools_executed = 0
+            tool_results_text = []
             for tc in tool_calls_buffer:
                 try:
                     args = json.loads(tc["function"]["arguments"])
@@ -119,15 +98,25 @@ async def agent_endpoint(request: AIRequest):
                 elif tc["function"]["name"] == "read_knowledge_base":
                     tool_result = await asyncio.to_thread(read_knowledge_base, query=request.text)
                 messages.append({"role": "tool", "tool_call_id": tc["id"], "content": str(tool_result)})
-                tools_executed += 1
-            if tools_executed == 0:
-                break
+                tool_results_text.append(f"[{tc['function']['name']}]: {tool_result}")
+            if tool_results_text:
+                joined = "\n".join(tool_results_text)
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Use the following information to answer the user's question directly and concisely. "
+                            f"Do NOT mention tools, search, external resources, or how you obtained the information — "
+                            f"just give the answer.\n\n{joined}"
+                        ),
+                    }
+                )
         else:
             yield 'data: {"error": "max_tool_depth_exceeded"}\n\n'
             return
 
-        messages.append({"role": "assistant", "content": full_content})
-        _trim_session(session_id)
+        append_assistant_message(session_id, full_content)
+        store_session_fact(session_id, request.text, full_content)
         if request.cross_session and full_content:
             exchange = f"[session:{session_id}] User: {request.text[:200]} | Assistant: {full_content[:500]}"
             await asyncio.to_thread(save_to_knowledge_base, exchange)
@@ -163,33 +152,38 @@ async def agent_sync(request: AIRequest):
 
     model = request.model or select_model("agent", text)
     context = await asyncio.to_thread(read_knowledge_base, request.text)
-    if context and context not in ("No relevant context found.", "Knowledge base is empty."):
-        system_prompt = get_system_prompt("agent", context=context)
-    else:
-        system_prompt = get_system_prompt("agent")
+    if not context or context in ("No relevant context found.", "Knowledge base is empty."):
+        context = ""
+    system_prompt = get_system_prompt("agent", context=context, session_context="")
 
-    if session_id not in chat_histories:
-        _evict_sessions()
-        chat_histories[session_id] = [{"role": "system", "content": system_prompt}]
-    chat_histories[session_id][0]["content"] = system_prompt
-    messages = chat_histories[session_id]
-    messages.append({"role": "user", "content": request.text})
-    _trim_session(session_id)
+    get_or_create_session(session_id, system_prompt)
+    messages = build_llm_messages(session_id, system_prompt, request.text)
 
     for turn in range(_MAX_TOOL_DEPTH):
         message = await call_llm(messages, model=model, tools_list=tools)
-        messages.append(message)
+
+        assistant_msg: dict = {"role": "assistant", "content": message.content or ""}
+        if message.tool_calls:
+            assistant_msg["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in message.tool_calls
+            ]
+        messages.append(assistant_msg)
 
         if not message.tool_calls:
             final_answer = message.content or ""
-            messages.append({"role": "assistant", "content": final_answer})
-            _trim_session(session_id)
+            append_assistant_message(session_id, final_answer)
+            store_session_fact(session_id, request.text, final_answer)
             if request.cross_session and final_answer:
                 exchange = f"[session:{session_id}] User: {request.text[:200]} | Assistant: {final_answer[:500]}"
                 await asyncio.to_thread(save_to_knowledge_base, exchange)
             return {"answer": final_answer}
 
-        tools_executed = 0
+        tool_results_text = []
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
             try:
@@ -202,18 +196,29 @@ async def agent_sync(request: AIRequest):
             elif tool_name == "read_knowledge_base":
                 tool_result = await asyncio.to_thread(read_knowledge_base, query=request.text)
             messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(tool_result)})
-            tools_executed += 1
-        if tools_executed == 0:
-            break
-    else:
-        raise HTTPException(status_code=500, detail="Agent exceeded max tool call depth")
+            tool_results_text.append(f"[{tool_name}]: {tool_result}")
 
-    # tools_executed was 0 — use last message content as final answer
-    _trim_session(session_id)
-    if request.cross_session and message.content:
-        exchange = f"[session:{session_id}] User: {request.text[:200]} | Assistant: {message.content[:500]}"
+        if tool_results_text:
+            joined = "\n".join(tool_results_text)
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"Use the following information to answer the user's question directly and concisely. "
+                        f"Do NOT mention tools, search, external resources, or how you obtained the information — "
+                        f"just give the answer.\n\n{joined}"
+                    ),
+                }
+            )
+
+    final = await call_llm(messages, model=model)
+    final_answer = final.content or ""
+    append_assistant_message(session_id, final_answer)
+    store_session_fact(session_id, request.text, final_answer)
+    if request.cross_session and final_answer:
+        exchange = f"[session:{session_id}] User: {request.text[:200]} | Assistant: {final_answer[:500]}"
         await asyncio.to_thread(save_to_knowledge_base, exchange)
-    return {"answer": message.content or ""}
+    return {"answer": final_answer}
 
 
 @router.post("/ai/process", status_code=202)

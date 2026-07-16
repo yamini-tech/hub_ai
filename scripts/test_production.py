@@ -15,7 +15,7 @@ import httpx
 
 BASE = "http://localhost:8003"
 HEADERS = {"Content-Type": "application/json"}
-TIMEOUT = 30
+TIMEOUT = 120
 
 passed = 0
 failed = 0
