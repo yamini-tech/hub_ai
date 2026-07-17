@@ -76,10 +76,14 @@ def ingest_chunks(
     user_id: str,
     document_id: str,
     collection_name: str = "knowledge_base",
+    filename: str = "",
 ) -> int:
     col = _get_collection(collection_name)
     ids = [f"{document_id}__{i}" for i in range(len(chunks))]
-    metadatas = [{"user_id": user_id, "document_id": document_id, "chunk_index": i} for i in range(len(chunks))]
+    metadatas = [
+        {"user_id": user_id, "document_id": document_id, "chunk_index": i, "filename": filename}
+        for i in range(len(chunks))
+    ]
     col.add(documents=chunks, ids=ids, metadatas=metadatas)
     return len(chunks)
 

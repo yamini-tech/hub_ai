@@ -25,16 +25,21 @@ router = APIRouter()
 _hub_deps = [Depends(verify_api_key)] if API_KEY_ENABLED else []
 
 
+async def _check_rate_limit(user_id: str) -> tuple[bool, int]:
+    return await asyncio.to_thread(
+        check_rate_limit_by_user,
+        user_id,
+        RATE_LIMIT_WINDOW_SEC,
+        RATE_LIMIT_MAX_REQUESTS,
+    )
+
+
 @router.post("/api/v1/chat/stream", dependencies=_hub_deps)
 async def chat_stream(payload: ChatStreamRequest):
     if not payload.messages:
         raise HTTPException(status_code=400, detail="messages is required")
     uid = payload.user_id or "anonymous"
-    rate_ok, req_count = check_rate_limit_by_user(
-        uid,
-        window_sec=RATE_LIMIT_WINDOW_SEC,
-        max_requests=RATE_LIMIT_MAX_REQUESTS,
-    )
+    rate_ok, req_count = await _check_rate_limit(uid)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
 
@@ -70,29 +75,21 @@ async def chat_stream(payload: ChatStreamRequest):
 @router.post("/api/v1/embed", dependencies=_hub_deps)
 async def embed_text(payload: EmbedRequest):
     uid = payload.user_id or "anonymous"
-    rate_ok, req_count = check_rate_limit_by_user(
-        uid,
-        window_sec=RATE_LIMIT_WINDOW_SEC,
-        max_requests=RATE_LIMIT_MAX_REQUESTS,
-    )
+    rate_ok, req_count = await _check_rate_limit(uid)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
-    embedding = get_embedding(payload.text)
+    embedding = await asyncio.to_thread(get_embedding, payload.text)
     return {"embedding": embedding}
 
 
 @router.post("/api/v1/extract", dependencies=_hub_deps)
 async def extract_document(payload: ExtractRequest):
     uid = payload.user_id or "anonymous"
-    rate_ok, req_count = check_rate_limit_by_user(
-        uid,
-        window_sec=RATE_LIMIT_WINDOW_SEC,
-        max_requests=RATE_LIMIT_MAX_REQUESTS,
-    )
+    rate_ok, req_count = await _check_rate_limit(uid)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
     try:
-        text = extract_text(payload.file_path, payload.file_type)
+        text = await asyncio.to_thread(extract_text, payload.file_path, payload.file_type)
         return {"text": text}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -105,29 +102,23 @@ async def extract_document(payload: ExtractRequest):
 @router.post("/api/v1/rag/ingest", dependencies=_hub_deps)
 async def rag_ingest(payload: RagIngestRequest):
     uid = payload.user_id or "anonymous"
-    rate_ok, req_count = check_rate_limit_by_user(
-        uid,
-        window_sec=RATE_LIMIT_WINDOW_SEC,
-        max_requests=RATE_LIMIT_MAX_REQUESTS,
-    )
+    rate_ok, req_count = await _check_rate_limit(uid)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
-    chunks = chunk_text(payload.text)
-    count = ingest_chunks(chunks, payload.user_id, payload.document_id)
+    chunks = await asyncio.to_thread(chunk_text, payload.text)
+    count = await asyncio.to_thread(
+        ingest_chunks, chunks, payload.user_id, payload.document_id, filename=payload.filename
+    )
     return {"chunks_stored": count}
 
 
 @router.post("/api/v1/rag/retrieve", dependencies=_hub_deps)
 async def rag_retrieve(payload: RagRetrieveRequest):
     uid = payload.user_id or "anonymous"
-    rate_ok, req_count = check_rate_limit_by_user(
-        uid,
-        window_sec=RATE_LIMIT_WINDOW_SEC,
-        max_requests=RATE_LIMIT_MAX_REQUESTS,
-    )
+    rate_ok, req_count = await _check_rate_limit(uid)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
-    chunks = retrieve_chunks(payload.query, payload.user_id, top_k=payload.top_k)
+    chunks = await asyncio.to_thread(retrieve_chunks, payload.query, payload.user_id, top_k=payload.top_k)
     return {"chunks": chunks}
 
 
@@ -135,12 +126,8 @@ async def rag_retrieve(payload: RagRetrieveRequest):
 async def rag_delete(document_id: str, user_id: str):
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id query parameter is required")
-    rate_ok, req_count = check_rate_limit_by_user(
-        user_id,
-        window_sec=RATE_LIMIT_WINDOW_SEC,
-        max_requests=RATE_LIMIT_MAX_REQUESTS,
-    )
+    rate_ok, req_count = await _check_rate_limit(user_id)
     if not rate_ok:
         raise HTTPException(status_code=429, detail=f"Rate limit exceeded: {req_count} requests in window.")
-    delete_document_chunks(document_id, user_id)
+    await asyncio.to_thread(delete_document_chunks, document_id, user_id)
     return Response(status_code=204)

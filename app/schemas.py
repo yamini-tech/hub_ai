@@ -62,6 +62,7 @@ class RagIngestRequest(BaseModel):
     user_id: str = Field(..., min_length=1, description="User identifier")
     document_id: str = Field(..., min_length=1, description="Document identifier")
     text: str = Field(..., min_length=1, description="Text content to ingest")
+    filename: str = Field("", description="Original filename")
 
 
 class RagRetrieveRequest(BaseModel):
